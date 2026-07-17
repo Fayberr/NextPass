@@ -94,6 +94,22 @@ export interface PasskeyGetRes {
   userHandle: string; // base64url
 }
 
+/**
+ * Sent from the background to a tab's content script (separate channel from the popup protocol)
+ * to (a) obtain the page's true origin — the webAuthenticationProxy events don't include it — and
+ * (b) show the in-page approval prompt for a passkey ceremony.
+ */
+export interface WaPromptRequest {
+  kind: 'wa_prompt';
+  op: 'create' | 'get';
+  rpId: string;
+  userName?: string;
+}
+export interface WaPromptResponse {
+  approved: boolean;
+  origin: string;
+}
+
 export interface AutofillMatch {
   id: string;
   name: string;

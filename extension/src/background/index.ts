@@ -5,9 +5,20 @@
  */
 
 import { SessionManager } from '../lib/session.js';
+import { WebAuthnProxy } from './webauthn-proxy.js';
 import type { Msg, MsgResult } from '../lib/messages.js';
 
 const session = new SessionManager();
+const waProxy = new WebAuthnProxy(session);
+waProxy.install();
+
+// Become the authoritative WebAuthn authority whenever the vault is unlocked; step aside on lock so
+// the user's platform passkeys keep working.
+async function syncProxyAttachment(): Promise<void> {
+  const st = await session.getState();
+  if (st.unlocked) await waProxy.attach();
+  else await waProxy.detach();
+}
 
 async function handle(msg: Msg): Promise<MsgResult> {
   try {
@@ -21,23 +32,28 @@ async function handle(msg: Msg): Promise<MsgResult> {
 
       case 'register': {
         const recovery = await session.register(msg.serverUrl, msg.identifier, msg.password);
+        await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState(), recovery };
       }
 
       case 'login':
         await session.login(msg.serverUrl, msg.identifier, msg.password);
+        await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState() };
 
       case 'unlock':
         await session.unlock(msg.password);
+        await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState() };
 
       case 'lock':
         session.lock();
+        await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState() };
 
       case 'forget':
         await session.forget();
+        await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState() };
 
       case 'ack_recovery':

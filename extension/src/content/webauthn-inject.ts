@@ -1,129 +1,35 @@
 /**
- * Main-world WebAuthn shim. Runs in the PAGE's JS context (world: MAIN) at document_start so it
- * can replace navigator.credentials.create/get BEFORE any relying-party script calls them.
+ * Main-world priority guard for the WebAuthn shim (world: MAIN, document_start).
  *
- * It owns no secrets and no chrome.* access. It marshals the RP's PublicKeyCredential options
- * into a plain, JSON-safe request (base64url for all binary), hands it to the isolated-world
- * bridge via window.postMessage, and reconstructs a PublicKeyCredential from the reply.
+ * The actual interception is done at the browser level by chrome.webAuthenticationProxy in the
+ * background. But a competing extension (e.g. Kaspersky) can monkey-patch navigator.credentials in
+ * the page, which would run BEFORE the native path and steal the ceremony from our proxy.
  *
- * Fallback: if the vault has no passkey / is locked / the user denies, we fall back to the real
- * platform authenticator so the site keeps working.
+ * To keep authority, we bind create/get/isUvpaa to the native implementations and lock the
+ * properties (non-writable, non-configurable) so nothing can replace them afterwards. All calls
+ * then flow through the native path -> our proxy. Best-effort: whoever runs first at document_start
+ * wins the lock; try/catch keeps us from ever breaking the page.
  */
+(() => {
+  try {
+    const creds = navigator.credentials as CredentialsContainer | undefined;
+    if (!creds) return;
 
-const TAG = '__pm_webauthn__';
-let seq = 0;
+    const nativeCreate = creds.create.bind(creds);
+    const nativeGet = creds.get.bind(creds);
+    Object.defineProperty(creds, 'create', { value: nativeCreate, writable: false, configurable: false, enumerable: true });
+    Object.defineProperty(creds, 'get', { value: nativeGet, writable: false, configurable: false, enumerable: true });
 
-// --- base64url <-> bytes (page context; no shared import to keep main-world tiny) ---
-function bufToB64url(buf: ArrayBuffer | ArrayBufferView): string {
-  const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function b64urlToBuf(s: string): ArrayBuffer {
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
-  const bin = atob(b64 + pad);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out.buffer;
-}
-
-function rpIdFromOrigin(): string {
-  return location.hostname;
-}
-
-/** Round-trip a request through the isolated-world bridge. */
-function ask<T>(op: 'create' | 'get', req: unknown): Promise<{ ok: true; res: T } | { ok: false; error: string; fallback?: boolean }> {
-  return new Promise((resolve) => {
-    const id = `${Date.now()}-${seq++}`;
-    function onMsg(ev: MessageEvent) {
-      const d = ev.data;
-      if (!d || d[TAG] !== 'response' || d.id !== id) return;
-      window.removeEventListener('message', onMsg);
-      resolve(d.payload);
+    const PKC = (window as unknown as { PublicKeyCredential?: { isUserVerifyingPlatformAuthenticatorAvailable?: () => Promise<boolean> } }).PublicKeyCredential;
+    if (PKC?.isUserVerifyingPlatformAuthenticatorAvailable) {
+      const nativeUvpaa = PKC.isUserVerifyingPlatformAuthenticatorAvailable.bind(PKC);
+      Object.defineProperty(PKC, 'isUserVerifyingPlatformAuthenticatorAvailable', {
+        value: nativeUvpaa,
+        writable: false,
+        configurable: false,
+      });
     }
-    window.addEventListener('message', onMsg);
-    window.postMessage({ [TAG]: 'request', id, op, req }, location.origin);
-  });
-}
-
-const orig = {
-  create: navigator.credentials.create.bind(navigator.credentials),
-  get: navigator.credentials.get.bind(navigator.credentials),
-};
-
-navigator.credentials.create = async function (options?: CredentialCreationOptions): Promise<Credential | null> {
-  const pk = options?.publicKey;
-  if (!pk) return orig.create(options);
-
-  const rp = pk.rp ?? {};
-  const user = pk.user;
-  const req = {
-    rpId: rp.id ?? rpIdFromOrigin(),
-    rpName: rp.name,
-    origin: location.origin,
-    challenge: bufToB64url(pk.challenge as ArrayBuffer),
-    userHandle: bufToB64url(user.id as ArrayBuffer),
-    userName: user.name,
-    userDisplayName: user.displayName,
-    excludeCredentials: (pk.excludeCredentials ?? []).map((c) => bufToB64url(c.id as ArrayBuffer)),
-  };
-
-  const r = await ask<{ credentialId: string; clientDataJSON: string; attestationObject: string; transports: string[] }>('create', req);
-  if (!r.ok) {
-    if (r.fallback) return orig.create(options);
-    throw new DOMException(r.error || 'Passkey creation failed', 'NotAllowedError');
+  } catch {
+    /* another guard already locked these, or the engine disallows it — nothing to do. */
   }
-
-  const rawId = b64urlToBuf(r.res.credentialId);
-  const cred = {
-    id: r.res.credentialId,
-    rawId,
-    type: 'public-key',
-    authenticatorAttachment: 'platform',
-    response: {
-      clientDataJSON: b64urlToBuf(r.res.clientDataJSON),
-      attestationObject: b64urlToBuf(r.res.attestationObject),
-      getTransports: () => r.res.transports,
-    },
-    getClientExtensionResults: () => ({}),
-  };
-  Object.setPrototypeOf(cred, PublicKeyCredential.prototype);
-  return cred as unknown as Credential;
-};
-
-navigator.credentials.get = async function (options?: CredentialRequestOptions): Promise<Credential | null> {
-  const pk = options?.publicKey;
-  if (!pk) return orig.get(options);
-
-  const req = {
-    rpId: pk.rpId ?? rpIdFromOrigin(),
-    origin: location.origin,
-    challenge: bufToB64url(pk.challenge as ArrayBuffer),
-    allowCredentials: (pk.allowCredentials ?? []).map((c) => bufToB64url(c.id as ArrayBuffer)),
-  };
-
-  const r = await ask<{ credentialId: string; clientDataJSON: string; authenticatorData: string; signature: string; userHandle: string }>('get', req);
-  if (!r.ok) {
-    if (r.fallback) return orig.get(options);
-    throw new DOMException(r.error || 'Passkey request failed', 'NotAllowedError');
-  }
-
-  const rawId = b64urlToBuf(r.res.credentialId);
-  const cred = {
-    id: r.res.credentialId,
-    rawId,
-    type: 'public-key',
-    authenticatorAttachment: 'platform',
-    response: {
-      clientDataJSON: b64urlToBuf(r.res.clientDataJSON),
-      authenticatorData: b64urlToBuf(r.res.authenticatorData),
-      signature: b64urlToBuf(r.res.signature),
-      userHandle: r.res.userHandle ? b64urlToBuf(r.res.userHandle) : null,
-    },
-    getClientExtensionResults: () => ({}),
-  };
-  Object.setPrototypeOf(cred, PublicKeyCredential.prototype);
-  return cred as unknown as Credential;
-};
+})();

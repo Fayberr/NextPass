@@ -3,6 +3,7 @@ import { Button, Card } from '../ui.js';
 import { ArrowLeft, Check, Copy, Eye, EyeOff, Pencil, Trash, Star } from '../icons.js';
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
+import { TotpCode } from '../TotpCode.js';
 import type { LoginFields } from '@pm/shared';
 
 function CopyRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
@@ -148,7 +149,7 @@ export function ItemDetail({
               {fields.username && <CopyRow label="Username" value={fields.username} />}
               {fields.email && <CopyRow label="Email" value={fields.email} />}
               {fields.password && <CopyRow label="Password" value={fields.password} secret />}
-              {fields.totp && <CopyRow label="TOTP secret" value={fields.totp} secret />}
+              {fields.totp && <TotpCode secret={fields.totp} />}
             </Card>
 
             {fields.uris?.length > 0 && (

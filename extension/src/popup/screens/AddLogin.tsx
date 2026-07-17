@@ -3,7 +3,7 @@ import { Button, Field, Input } from '../ui.js';
 import { ArrowLeft, Copy, Check, Eye, EyeOff, Wand } from '../icons.js';
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
-import { generatePassword, type LoginFields, type MatchMode } from '@pm/shared';
+import { generatePassword, isValidTotp, type LoginFields, type MatchMode } from '@pm/shared';
 
 /**
  * Add OR edit a login. When `editId`/`initial` are provided it edits in place (update_login);
@@ -28,6 +28,7 @@ export function AddLogin({
   const [uri, setUri] = useState(initial?.uris?.[0] ?? '');
   const [matchMode, setMatchMode] = useState<MatchMode>(initial?.matchMode ?? 'host');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [totp, setTotp] = useState(initial?.totp ?? '');
   const [showPw, setShowPw] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -76,6 +77,7 @@ export function AddLogin({
       uris: uri.trim() ? [uri.trim()] : [],
       matchMode,
       notes: notes.trim() || undefined,
+      totp: totp.trim() || undefined,
     };
     const res = editing
       ? await send({ kind: 'update_login', id: editId!, fields })
@@ -182,6 +184,21 @@ export function AddLogin({
             <option value="exact">Exact URL</option>
             <option value="never">Never autofill</option>
           </select>
+        </Field>
+
+        <Field label="One-time code (TOTP)">
+          <Input
+            value={totp}
+            onChange={(e) => setTotp(e.target.value)}
+            autoComplete="off"
+            placeholder="otpauth:// URI or secret key"
+            className="font-mono"
+          />
+          {totp.trim() && !isValidTotp(totp.trim()) && (
+            <p className="mt-1 text-[11px] text-amber-400">
+              Doesn't look like a valid TOTP secret or otpauth URI.
+            </p>
+          )}
         </Field>
 
         <Field label="Notes">

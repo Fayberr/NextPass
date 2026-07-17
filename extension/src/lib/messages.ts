@@ -76,6 +76,9 @@ export interface PasskeyCreateRes {
   credentialId: string; // base64url
   clientDataJSON: string; // base64url
   attestationObject: string; // base64url
+  authenticatorData: string; // base64url
+  publicKey: string; // base64url (SPKI DER)
+  publicKeyAlgorithm: number; // COSE alg id, ES256 = -7
   transports: string[];
 }
 

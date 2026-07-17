@@ -44,7 +44,54 @@ async function promptActiveTab(op: 'create' | 'get', rpId: string, userName?: st
 
 export class WebAuthnProxy {
   private attached = false;
+  private unlockWindowId: number | null = null;
   constructor(private session: SessionManager) {}
+
+  /**
+   * If the vault is locked when a ceremony arrives, open our popup as a standalone window so the
+   * user can unlock, then wait (polling) until unlocked or a timeout. Returns false if still locked.
+   * This is what lets us intercept even while locked instead of falling through to Windows Hello.
+   */
+  private async ensureUnlocked(): Promise<boolean> {
+    if ((await this.session.getState()).unlocked) return true;
+    await this.openUnlockWindow();
+    const deadline = Date.now() + 55_000; // stay under the RP's typical ~60s ceremony timeout
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 600));
+      if ((await this.session.getState()).unlocked) {
+        await this.closeUnlockWindow();
+        return true;
+      }
+    }
+    await this.closeUnlockWindow();
+    return false;
+  }
+
+  private async openUnlockWindow(): Promise<void> {
+    if (this.unlockWindowId !== null) {
+      try {
+        await chrome.windows.update(this.unlockWindowId, { focused: true });
+        return;
+      } catch {
+        this.unlockWindowId = null; // window was closed; fall through and reopen
+      }
+    }
+    const win = await chrome.windows.create({
+      url: chrome.runtime.getURL('index.html'),
+      type: 'popup',
+      width: 380,
+      height: 600,
+      focused: true,
+    });
+    this.unlockWindowId = win?.id ?? null;
+  }
+
+  private async closeUnlockWindow(): Promise<void> {
+    if (this.unlockWindowId === null) return;
+    const id = this.unlockWindowId;
+    this.unlockWindowId = null;
+    await chrome.windows.remove(id).catch(() => undefined);
+  }
 
   install(): void {
     if (typeof chrome.webAuthenticationProxy === 'undefined') {
@@ -77,6 +124,7 @@ export class WebAuthnProxy {
 
   private async onCreate(r: chrome.webAuthenticationProxy.CreateRequest): Promise<void> {
     try {
+      if (!(await this.ensureUnlocked())) throw domError('NotAllowedError', 'Vault is locked.');
       const opts = JSON.parse(r.requestDetailsJson) as CreationOptionsJson;
       const prompt = await promptActiveTab('create', opts.rp?.id ?? '', opts.user?.name);
       const origin = prompt?.origin ?? (opts.rp?.id ? `https://${opts.rp.id}` : '');
@@ -103,7 +151,10 @@ export class WebAuthnProxy {
         response: {
           clientDataJSON: res.clientDataJSON,
           attestationObject: res.attestationObject,
+          authenticatorData: res.authenticatorData,
           transports: res.transports,
+          publicKey: res.publicKey,
+          publicKeyAlgorithm: res.publicKeyAlgorithm,
         },
         clientExtensionResults: {},
       });
@@ -115,6 +166,7 @@ export class WebAuthnProxy {
 
   private async onGet(r: chrome.webAuthenticationProxy.GetRequest): Promise<void> {
     try {
+      if (!(await this.ensureUnlocked())) throw domError('NotAllowedError', 'Vault is locked.');
       const opts = JSON.parse(r.requestDetailsJson) as RequestOptionsJson;
       const prompt = await promptActiveTab('get', opts.rpId ?? '');
       const origin = prompt?.origin ?? (opts.rpId ? `https://${opts.rpId}` : '');

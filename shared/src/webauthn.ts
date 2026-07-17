@@ -131,13 +131,19 @@ export interface CreatePasskeyResult {
     credentialId: Uint8Array;
     clientDataJSON: Uint8Array;
     attestationObject: Uint8Array;
+    authenticatorData: Uint8Array;
     publicKeyCose: Uint8Array;
+    /** SubjectPublicKeyInfo (DER) — the WebAuthn JSON `response.publicKey`. */
+    publicKeySpki: Uint8Array;
+    /** COSE algorithm identifier — ES256 = -7. WebAuthn JSON `response.publicKeyAlgorithm`. */
+    publicKeyAlgorithm: number;
   };
 }
 
 export async function createPasskey(req: CreatePasskeyRequest): Promise<CreatePasskeyResult> {
   const pair = (await subtle.generateKey(EC, true, ['sign', 'verify'])) as CryptoKeyPair;
   const rawPub = new Uint8Array(await subtle.exportKey('raw', pair.publicKey));
+  const spki = new Uint8Array(await subtle.exportKey('spki', pair.publicKey));
   const pkcs8 = new Uint8Array(await subtle.exportKey('pkcs8', pair.privateKey));
 
   const credentialId = randomBytes(32);
@@ -165,7 +171,10 @@ export async function createPasskey(req: CreatePasskeyRequest): Promise<CreatePa
       credentialId,
       clientDataJSON: clientDataJSON('webauthn.create', req.challenge, req.origin),
       attestationObject,
+      authenticatorData: authData,
       publicKeyCose: cose,
+      publicKeySpki: spki,
+      publicKeyAlgorithm: -7,
     },
   };
 }

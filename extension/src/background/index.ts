@@ -12,11 +12,13 @@ const session = new SessionManager();
 const waProxy = new WebAuthnProxy(session);
 waProxy.install();
 
-// Become the authoritative WebAuthn authority whenever the vault is unlocked; step aside on lock so
-// the user's platform passkeys keep working.
+// Become the authoritative WebAuthn authority whenever an account is configured on this device —
+// even while locked — so passkey ceremonies never fall through to Windows Hello. A locked request
+// pops our vault to unlock first (see WebAuthnProxy.ensureUnlocked). We only step aside (detach)
+// when there is no account at all (e.g. after "forget").
 async function syncProxyAttachment(): Promise<void> {
   const st = await session.getState();
-  if (st.unlocked) await waProxy.attach();
+  if (st.configured) await waProxy.attach();
   else await waProxy.detach();
 }
 

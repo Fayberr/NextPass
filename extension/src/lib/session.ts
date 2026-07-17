@@ -345,6 +345,9 @@ export class SessionManager {
       credentialId: b64url(result.response.credentialId),
       clientDataJSON: b64url(result.response.clientDataJSON),
       attestationObject: b64url(result.response.attestationObject),
+      authenticatorData: b64url(result.response.authenticatorData),
+      publicKey: b64url(result.response.publicKeySpki),
+      publicKeyAlgorithm: result.response.publicKeyAlgorithm,
       transports: ['internal', 'hybrid'],
     };
   }

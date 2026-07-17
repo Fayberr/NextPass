@@ -5,17 +5,20 @@ import { Recovery } from './screens/Recovery.js';
 import { VaultList } from './screens/VaultList.js';
 import { ItemDetail } from './screens/ItemDetail.js';
 import { AddLogin } from './screens/AddLogin.js';
+import { AddTotp } from './screens/AddTotp.js';
 import { Generator } from './screens/Generator.js';
 import { Health } from './screens/Health.js';
 import { Settings } from './screens/Settings.js';
 import type { VaultState } from '../lib/messages.js';
-import type { LoginFields } from '@pm/shared';
+import type { LoginFields, TotpFields } from '@pm/shared';
 
 type View =
   | { name: 'list' }
   | { name: 'detail'; id: string }
   | { name: 'add' }
   | { name: 'edit'; id: string; initial: LoginFields }
+  | { name: 'add_totp' }
+  | { name: 'edit_totp'; id: string; initial: TotpFields }
   | { name: 'generator' }
   | { name: 'health' }
   | { name: 'settings' };
@@ -59,12 +62,27 @@ export function App() {
         <ItemDetail
           id={view.id}
           onBack={() => setView({ name: 'list' })}
-          onEdit={(id, initial) => setView({ name: 'edit', id, initial })}
+          onEdit={(id, type, fields) =>
+            type === 'totp'
+              ? setView({ name: 'edit_totp', id, initial: fields as unknown as TotpFields })
+              : setView({ name: 'edit', id, initial: fields })
+          }
           onDeleted={() => setView({ name: 'list' })}
         />
       );
     case 'add':
       return <AddLogin onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />;
+    case 'add_totp':
+      return <AddTotp onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />;
+    case 'edit_totp':
+      return (
+        <AddTotp
+          editId={view.id}
+          initial={view.initial}
+          onDone={() => setView({ name: 'detail', id: view.id })}
+          onCancel={() => setView({ name: 'detail', id: view.id })}
+        />
+      );
     case 'generator':
       return <Generator onBack={() => setView({ name: 'list' })} />;
     case 'health':
@@ -90,6 +108,7 @@ export function App() {
         <VaultList
           onSelect={(id) => setView({ name: 'detail', id })}
           onAdd={() => setView({ name: 'add' })}
+          onAddTotp={() => setView({ name: 'add_totp' })}
           onGenerator={() => setView({ name: 'generator' })}
           onHealth={() => setView({ name: 'health' })}
           onSettings={() => setView({ name: 'settings' })}

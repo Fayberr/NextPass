@@ -50,7 +50,7 @@ export function ItemDetail({
 }: {
   id: string;
   onBack: () => void;
-  onEdit: (id: string, fields: LoginFields) => void;
+  onEdit: (id: string, type: string, fields: LoginFields) => void;
   onDeleted: () => void;
 }) {
   const [fields, setFields] = useState<LoginFields | null>(null);
@@ -86,7 +86,7 @@ export function ItemDetail({
     else setError(res.error);
   }
 
-  const editable = type === 'login';
+  const editable = type === 'login' || type === 'totp';
 
   return (
     <div className="flex h-[500px] flex-col">
@@ -104,7 +104,7 @@ export function ItemDetail({
             <Star size={16} filled={favorite} />
           </Button>
           {editable && fields && (
-            <Button variant="subtle" onClick={() => onEdit(id, fields)} title="Edit">
+            <Button variant="subtle" onClick={() => onEdit(id, type, fields)} title="Edit">
               <Pencil size={16} />
             </Button>
           )}
@@ -146,10 +146,26 @@ export function ItemDetail({
           <>
             <h2 className="mb-4 text-lg font-semibold">{fields.name || '(no name)'}</h2>
             <Card>
-              {fields.username && <CopyRow label="Username" value={fields.username} />}
-              {fields.email && <CopyRow label="Email" value={fields.email} />}
-              {fields.password && <CopyRow label="Password" value={fields.password} secret />}
-              {fields.totp && <TotpCode secret={fields.totp} />}
+              {type === 'totp' ? (
+                <>
+                  {(fields as { secret?: string }).secret && (
+                    <TotpCode secret={(fields as { secret: string }).secret} />
+                  )}
+                  {(fields as { issuer?: string }).issuer && (
+                    <CopyRow label="Issuer" value={(fields as { issuer: string }).issuer} />
+                  )}
+                  {(fields as { account?: string }).account && (
+                    <CopyRow label="Account" value={(fields as { account: string }).account} />
+                  )}
+                </>
+              ) : (
+                <>
+                  {fields.username && <CopyRow label="Username" value={fields.username} />}
+                  {fields.email && <CopyRow label="Email" value={fields.email} />}
+                  {fields.password && <CopyRow label="Password" value={fields.password} secret />}
+                  {fields.totp && <TotpCode secret={fields.totp} />}
+                </>
+              )}
             </Card>
 
             {fields.uris?.length > 0 && (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Input } from '../ui.js';
 import { Lock, Plus, RefreshCw, Star, KeyRound, ShieldCheck, Settings } from '../icons.js';
 import { send } from '../client.js';
+import { TotpCode } from '../TotpCode.js';
 import type { ItemSummary } from '../../lib/messages.js';
 
 function faviconFor(uris: string[]): string | null {
@@ -18,6 +19,7 @@ function faviconFor(uris: string[]): string | null {
 export function VaultList({
   onSelect,
   onAdd,
+  onAddTotp,
   onLock,
   onGenerator,
   onHealth,
@@ -25,6 +27,7 @@ export function VaultList({
 }: {
   onSelect: (id: string) => void;
   onAdd: () => void;
+  onAddTotp: () => void;
   onLock: () => void;
   onGenerator: () => void;
   onHealth: () => void;
@@ -107,26 +110,37 @@ export function VaultList({
           filtered.map((item) => {
             const fav = faviconFor(item.uris);
             return (
-              <button
+              <div
                 key={item.id}
-                onClick={() => onSelect(item.id)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/5"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-white/5"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
-                  {fav ? (
-                    <img src={fav} alt="" className="h-4 w-4" />
-                  ) : (
-                    <span className="text-xs text-white/40">
-                      {item.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white/90">{item.name}</div>
-                  {item.username && (
-                    <div className="truncate text-xs text-white/40">{item.username}</div>
-                  )}
-                </div>
+                <button
+                  onClick={() => onSelect(item.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+                    {item.totp ? (
+                      <KeyRound size={16} className="text-violet-soft" />
+                    ) : fav ? (
+                      <img src={fav} alt="" className="h-4 w-4" />
+                    ) : (
+                      <span className="text-xs text-white/40">
+                        {item.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-white/90">{item.name}</div>
+                    {item.username && (
+                      <div className="truncate text-xs text-white/40">{item.username}</div>
+                    )}
+                  </div>
+                </button>
+                {item.totp && (
+                  <div className="shrink-0">
+                    <TotpCode secret={item.totp} label="" compact />
+                  </div>
+                )}
                 <span
                   role="button"
                   tabIndex={0}
@@ -135,21 +149,24 @@ export function VaultList({
                     e.stopPropagation();
                     void toggleFav(item.id, !item.favorite);
                   }}
-                  className={`shrink-0 rounded-md p-1 transition hover:bg-white/10 ${
+                  className={`shrink-0 cursor-pointer rounded-md p-1 transition hover:bg-white/10 ${
                     item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
                   }`}
                 >
                   <Star size={14} filled={item.favorite} />
                 </span>
-              </button>
+              </div>
             );
           })
         )}
       </div>
 
-      <footer className="border-t border-white/5 p-3">
-        <Button className="w-full" onClick={onAdd}>
+      <footer className="flex gap-2 border-t border-white/5 p-3">
+        <Button className="flex-1" onClick={onAdd}>
           <Plus size={16} /> Add login
+        </Button>
+        <Button variant="ghost" onClick={onAddTotp} title="Add authenticator code">
+          <KeyRound size={16} /> Code
         </Button>
       </footer>
     </div>

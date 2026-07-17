@@ -23,6 +23,7 @@ import {
   type ItemRecord,
   type LoginFields,
   type PasskeyFields,
+  type TotpFields,
 } from '@pm/shared';
 import {
   clearAccount,
@@ -266,9 +267,16 @@ export class SessionManager {
         id: r.id,
         type: r.type,
         name: (fields.name as string) ?? '(no name)',
-        username: (fields.username as string) ?? (fields.email as string) ?? null,
+        username:
+          (fields.username as string) ??
+          (fields.email as string) ??
+          (fields.account as string) ??
+          (fields.issuer as string) ??
+          null,
         uris: (fields.uris as string[]) ?? [],
         favorite: r.favorite,
+        // Standalone authenticator entries carry their secret so the list can render a live code.
+        totp: r.type === 'totp' ? (fields.secret as string) : undefined,
       });
     }
     out.sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name));
@@ -305,6 +313,35 @@ export class SessionManager {
     if (!acct) throw new Error('Not configured.');
     const prev = (await cacheGetAll()).find((r) => r.id === id);
     const upsert = await encryptItem(key, 'login', fields, {
+      favorite: prev?.favorite,
+      tags: prev?.tags,
+      folderId: prev?.folderId,
+    });
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Create a standalone authenticator (TOTP) item. */
+  async createTotp(fields: TotpFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, 'totp', fields);
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Overwrite a standalone TOTP item's fields, preserving favorite/tags/folder metadata. */
+  async updateTotp(id: string, fields: TotpFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const prev = (await cacheGetAll()).find((r) => r.id === id);
+    const upsert = await encryptItem(key, 'totp', fields, {
       favorite: prev?.favorite,
       tags: prev?.tags,
       folderId: prev?.folderId,

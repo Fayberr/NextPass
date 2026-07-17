@@ -109,6 +109,14 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.updateLogin(msg.id, msg.fields);
         return { ok: true, kind: 'void' };
 
+      case 'create_totp':
+        await session.createTotp(msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'update_totp':
+        await session.updateTotp(msg.id, msg.fields);
+        return { ok: true, kind: 'void' };
+
       case 'delete_item':
         await session.deleteItem(msg.id);
         return { ok: true, kind: 'void' };

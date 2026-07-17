@@ -56,6 +56,15 @@ export interface AutofillIdentityFields {
   country?: string;
 }
 
+/** A standalone authenticator entry: a TOTP not tied to a stored login (like Google Authenticator). */
+export interface TotpFields {
+  name: string; // display, e.g. "GitHub (alice)"
+  secret: string; // otpauth:// URI or raw base32 secret
+  issuer?: string;
+  account?: string;
+  notes?: string;
+}
+
 /** A WebAuthn/FIDO2 passkey stored in the vault (Phase 2). Private key is PKCS#8, base64. */
 export interface PasskeyFields {
   name: string; // display, e.g. "github.com — user@example.com"
@@ -76,6 +85,7 @@ export type ItemFields =
   | SecretFields
   | CardFields
   | AutofillIdentityFields
+  | TotpFields
   | PasskeyFields;
 
 /** Every item type carries a display `name`. */

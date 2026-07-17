@@ -4,7 +4,7 @@
  * memory and only ever returns decrypted field data on explicit request.
  */
 
-import type { AuditReport, LoginFields } from '@pm/shared';
+import type { AuditReport, LoginFields, TotpFields } from '@pm/shared';
 import type { Settings } from './settings.js';
 
 export interface VaultState {
@@ -27,6 +27,8 @@ export interface ItemSummary {
   username: string | null;
   uris: string[];
   favorite: boolean;
+  /** For standalone authenticator (type 'totp') items: the secret, so the list can render a live code. */
+  totp?: string;
 }
 
 export type Msg =
@@ -42,6 +44,8 @@ export type Msg =
   | { kind: 'get_item'; id: string }
   | { kind: 'create_login'; fields: LoginFields }
   | { kind: 'update_login'; id: string; fields: LoginFields }
+  | { kind: 'create_totp'; fields: TotpFields }
+  | { kind: 'update_totp'; id: string; fields: TotpFields }
   | { kind: 'delete_item'; id: string }
   | { kind: 'set_favorite'; id: string; favorite: boolean }
   | { kind: 'audit' }

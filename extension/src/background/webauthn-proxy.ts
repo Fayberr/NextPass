@@ -71,7 +71,7 @@ export class WebAuthnProxy {
       return s.configured && s.unlocked;
     };
     if (await ready()) return true;
-    await this.openUnlockWindow();
+    await this.openUnlockUi();
     const deadline = Date.now() + 55_000; // stay under the RP's typical ~60s ceremony timeout
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 600));
@@ -82,6 +82,23 @@ export class WebAuthnProxy {
     }
     await this.closeUnlockWindow();
     return false;
+  }
+
+  /**
+   * Show the unlock/login UI as the extension's toolbar popup (a trusted, in-browser dropdown with
+   * no separate OS window). If the browser can't open the action popup programmatically (older
+   * builds, or no focused window), fall back to a standalone popup window.
+   */
+  private async openUnlockUi(): Promise<void> {
+    if (chrome.action?.openPopup) {
+      try {
+        await chrome.action.openPopup();
+        return;
+      } catch {
+        // e.g. no active window / not permitted — fall back to a standalone window.
+      }
+    }
+    await this.openUnlockWindow();
   }
 
   private async openUnlockWindow(): Promise<void> {

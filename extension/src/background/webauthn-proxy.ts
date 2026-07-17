@@ -68,7 +68,9 @@ export class WebAuthnProxy {
   }
 
   async detach(): Promise<void> {
-    if (!this.attached || typeof chrome.webAuthenticationProxy === 'undefined') return;
+    // Always attempt: after a service-worker restart the browser may still hold our attachment even
+    // though `attached` reset to false, so guarding on the flag would leave us attached-while-locked.
+    if (typeof chrome.webAuthenticationProxy === 'undefined') return;
     await wap().detach().catch(() => undefined);
     this.attached = false;
   }

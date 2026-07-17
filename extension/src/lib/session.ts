@@ -43,6 +43,24 @@ import type {
 const PLATFORM = 'extension';
 
 const PENDING_RECOVERY_KEY = 'pendingRecovery';
+const VAULT_KEY_KEY = 'vaultKey';
+
+/**
+ * The unlocked vault key is mirrored into chrome.storage.session so it survives service-worker
+ * teardown (MV3 recycles the idle worker after ~30s, which would otherwise silently re-lock the
+ * vault mid-passkey-ceremony). storage.session is in-memory only, never written to disk, and
+ * auto-cleared when the browser closes — the same lifetime as holding it in worker memory, just
+ * durable across worker restarts. It is NOT readable by content scripts (trusted contexts only).
+ */
+async function getStoredKey(): Promise<Uint8Array | null> {
+  const v = await chrome.storage.session.get(VAULT_KEY_KEY);
+  const s = v[VAULT_KEY_KEY] as string | undefined;
+  return s ? fromB64url(s) : null;
+}
+async function setStoredKey(key: Uint8Array | null): Promise<void> {
+  if (key === null) await chrome.storage.session.remove(VAULT_KEY_KEY);
+  else await chrome.storage.session.set({ [VAULT_KEY_KEY]: b64url(key) });
+}
 
 /**
  * The one-time recovery phrase lives in chrome.storage.session (in-memory, survives service-worker
@@ -71,7 +89,18 @@ export class SessionManager {
 
   // --- state ---
 
+  /**
+   * Reload the vault key from storage.session if this worker instance was recycled and lost its
+   * in-memory copy. Call at the start of any operation that reads unlock state or needs the key.
+   */
+  private async hydrate(): Promise<void> {
+    if (this.vaultKey) return;
+    const stored = await getStoredKey();
+    if (stored) this.vaultKey = stored;
+  }
+
   async getState(): Promise<VaultState> {
+    await this.hydrate();
     const acct = await getAccount();
     const items = this.vaultKey ? await cacheGetAll() : [];
     return {
@@ -125,6 +154,7 @@ export class SessionManager {
       payload.kdfParams,
       auth.vault.wrappedKeyByMasterPw,
     );
+    await setStoredKey(this.vaultKey);
     await cacheClear();
     await setPendingRecovery(recoveryMnemonic);
     return recoveryMnemonic;
@@ -157,6 +187,7 @@ export class SessionManager {
       pre.kdfParams,
       auth.vault.wrappedKeyByMasterPw,
     );
+    await setStoredKey(this.vaultKey);
     await cacheClear();
     await this.sync().catch(() => undefined);
   }
@@ -171,18 +202,20 @@ export class SessionManager {
       acct.kdfParams,
       acct.wrappedKeyByMasterPw,
     );
+    await setStoredKey(this.vaultKey);
     this.lastError = null;
     // Best-effort background refresh; unlock still succeeds fully offline.
     void this.sync().catch(() => undefined);
   }
 
-  lock(): void {
+  async lock(): Promise<void> {
     this.vaultKey = null;
     this.decrypted.clear();
+    await setStoredKey(null);
   }
 
   async forget(): Promise<void> {
-    this.lock();
+    await this.lock();
     await cacheClear();
     await clearAccount();
     await setPendingRecovery(null);
@@ -219,6 +252,7 @@ export class SessionManager {
   }
 
   async listItems(): Promise<ItemSummary[]> {
+    await this.hydrate();
     this.requireKey();
     const records = await cacheGetAll();
     const out: ItemSummary[] = [];
@@ -239,6 +273,7 @@ export class SessionManager {
   }
 
   async getItem(id: string): Promise<{ type: string; fields: unknown }> {
+    await this.hydrate();
     this.requireKey();
     const records = await cacheGetAll();
     const rec = records.find((r) => r.id === id);
@@ -248,6 +283,7 @@ export class SessionManager {
   }
 
   async createLogin(fields: LoginFields): Promise<void> {
+    await this.hydrate();
     const key = this.requireKey();
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
@@ -273,6 +309,7 @@ export class SessionManager {
 
   /** navigator.credentials.create() — mint a passkey, store it as a vault item, return the attestation. */
   async passkeyCreate(req: PasskeyCreateReq): Promise<PasskeyCreateRes> {
+    await this.hydrate();
     const key = this.requireKey();
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
@@ -314,6 +351,7 @@ export class SessionManager {
 
   /** navigator.credentials.get() — find a matching passkey, sign the assertion, bump the counter. */
   async passkeyGet(req: PasskeyGetReq): Promise<PasskeyGetRes> {
+    await this.hydrate();
     const key = this.requireKey();
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
@@ -358,6 +396,7 @@ export class SessionManager {
   // --- autofill ---
 
   async autofillQuery(url: string): Promise<AutofillMatch[]> {
+    await this.hydrate();
     if (!this.vaultKey) return [];
     const records = await cacheGetAll();
     const matches: AutofillMatch[] = [];

@@ -47,7 +47,7 @@ async function handle(msg: Msg): Promise<MsgResult> {
         return { ok: true, kind: 'state', state: await session.getState() };
 
       case 'lock':
-        session.lock();
+        await session.lock();
         await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState() };
 

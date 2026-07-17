@@ -7,7 +7,10 @@
 
 import type { KdfParams } from '@pm/shared';
 
-export const DEFAULT_SERVER_URL = 'http://localhost:8787';
+// Default points at the always-on Pi server over the LAN so the extension works turnkey from
+// another machine (e.g. the Windows PC) with no manual entry. Override on the login screen for
+// local dev (http://localhost:8787). The Pi origin is already in the manifest host_permissions.
+export const DEFAULT_SERVER_URL = 'http://192.168.178.2:8787';
 
 export interface AccountMeta {
   serverUrl: string;

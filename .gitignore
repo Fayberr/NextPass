@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# local databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# secrets / env — NEVER commit
+.env
+.env.*
+*.pem
+*-private*
+secrets/
+
+# logs / os
+*.log
+.DS_Store

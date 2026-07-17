@@ -27,14 +27,19 @@ export class ApiError extends Error {
 
 export class ApiClient {
   private token: string | null;
+  private fetchImpl: typeof fetch;
 
   constructor(
     private baseUrl: string,
     token: string | null = null,
-    private fetchImpl: typeof fetch = fetch,
+    fetchImpl: typeof fetch = fetch,
   ) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.token = token;
+    // Bind to the global scope. In a service worker (and browsers), fetch must be
+    // invoked with `this === globalThis`; calling it as a bound method property
+    // (this.fetchImpl(...)) triggers "Illegal invocation". Binding fixes that.
+    this.fetchImpl = fetchImpl.bind(globalThis);
   }
 
   setToken(token: string | null): void {

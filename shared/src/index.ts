@@ -8,3 +8,5 @@ export * from './vault.js';
 export * from './api.js';
 export * from './matching.js';
 export * from './items.js';
+export * from './cbor.js';
+export * from './webauthn.js';

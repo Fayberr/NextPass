@@ -56,7 +56,27 @@ export interface AutofillIdentityFields {
   country?: string;
 }
 
-export type ItemFields = LoginFields | SecretFields | CardFields | AutofillIdentityFields;
+/** A WebAuthn/FIDO2 passkey stored in the vault (Phase 2). Private key is PKCS#8, base64. */
+export interface PasskeyFields {
+  name: string; // display, e.g. "github.com — user@example.com"
+  rpId: string;
+  rpName?: string;
+  userHandle: string; // base64 (PublicKeyCredentialUserEntity.id)
+  userName?: string;
+  userDisplayName?: string;
+  credentialId: string; // base64url
+  privateKey: string; // PKCS#8, base64
+  signCount: number;
+  createdAt: number;
+  notes?: string;
+}
+
+export type ItemFields =
+  | LoginFields
+  | SecretFields
+  | CardFields
+  | AutofillIdentityFields
+  | PasskeyFields;
 
 /** Every item type carries a display `name`. */
 export function itemDisplayName(fields: { name?: string }): string {

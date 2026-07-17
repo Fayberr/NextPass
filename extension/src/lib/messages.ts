@@ -14,6 +14,8 @@ export interface VaultState {
   itemCount: number;
   online: boolean;
   lastError: string | null;
+  /** One-time recovery phrase awaiting the user's acknowledgement (null once saved). */
+  pendingRecovery: string | null;
 }
 
 /** Lightweight item summary safe to render in the list (already decrypted names). */
@@ -34,6 +36,7 @@ export type Msg =
   | { kind: 'unlock'; password: string }
   | { kind: 'lock' }
   | { kind: 'forget' }
+  | { kind: 'ack_recovery' }
   | { kind: 'list_items' }
   | { kind: 'get_item'; id: string }
   | { kind: 'create_login'; fields: LoginFields }

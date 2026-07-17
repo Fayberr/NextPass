@@ -40,6 +40,10 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.forget();
         return { ok: true, kind: 'state', state: await session.getState() };
 
+      case 'ack_recovery':
+        await session.ackRecovery();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
       case 'list_items':
         return { ok: true, kind: 'items', items: await session.listItems() };
 

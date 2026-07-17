@@ -42,6 +42,22 @@ import type {
 
 const PLATFORM = 'extension';
 
+const PENDING_RECOVERY_KEY = 'pendingRecovery';
+
+/**
+ * The one-time recovery phrase lives in chrome.storage.session (in-memory, survives service-worker
+ * teardown, auto-cleared when the browser closes) so it isn't lost if the popup is closed/reopened
+ * — or the SW recycled — before the user confirms they saved it. It is never written to disk.
+ */
+async function getPendingRecovery(): Promise<string | null> {
+  const v = await chrome.storage.session.get(PENDING_RECOVERY_KEY);
+  return (v[PENDING_RECOVERY_KEY] as string | undefined) ?? null;
+}
+async function setPendingRecovery(phrase: string | null): Promise<void> {
+  if (phrase === null) await chrome.storage.session.remove(PENDING_RECOVERY_KEY);
+  else await chrome.storage.session.set({ [PENDING_RECOVERY_KEY]: phrase });
+}
+
 /** Decrypted item held only in memory. `fields` shape depends on `type`. */
 interface DecryptedItem {
   record: ItemRecord;
@@ -66,7 +82,13 @@ export class SessionManager {
       itemCount: items.length,
       online: navigator.onLine,
       lastError: this.lastError,
+      pendingRecovery: await getPendingRecovery(),
     };
+  }
+
+  /** Called once the user confirms they've saved the recovery phrase. */
+  async ackRecovery(): Promise<void> {
+    await setPendingRecovery(null);
   }
 
   private api(acct: AccountMeta): ApiClient {
@@ -104,6 +126,7 @@ export class SessionManager {
       auth.vault.wrappedKeyByMasterPw,
     );
     await cacheClear();
+    await setPendingRecovery(recoveryMnemonic);
     return recoveryMnemonic;
   }
 
@@ -162,6 +185,7 @@ export class SessionManager {
     this.lock();
     await cacheClear();
     await clearAccount();
+    await setPendingRecovery(null);
   }
 
   // --- sync ---

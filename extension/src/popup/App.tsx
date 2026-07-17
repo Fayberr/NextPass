@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { send } from './client.js';
 import { Unlock } from './screens/Unlock.js';
+import { Recovery } from './screens/Recovery.js';
 import { VaultList } from './screens/VaultList.js';
 import { ItemDetail } from './screens/ItemDetail.js';
 import { AddLogin } from './screens/AddLogin.js';
@@ -23,6 +24,18 @@ export function App() {
 
   if (!state) {
     return <div className="p-6 text-center text-sm text-white/40">Loading…</div>;
+  }
+
+  // Highest priority: an unacknowledged recovery phrase must be shown (and can't be lost by
+  // closing the popup) until the user confirms they saved it.
+  if (state.pendingRecovery) {
+    return (
+      <Recovery
+        phrase={state.pendingRecovery}
+        identifier={state.identifier}
+        onAcked={() => { void refresh(); setView({ name: 'list' }); }}
+      />
+    );
   }
 
   if (!state.unlocked) {

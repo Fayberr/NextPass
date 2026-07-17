@@ -8,8 +8,9 @@
  * in the page and knows location.origin. That content script also pins navigator.credentials to the
  * native path so nothing else can intercept ahead of us.
  *
- * We attach only while the vault is unlocked; on lock we detach so the user's other (platform)
- * passkeys keep working normally.
+ * We attach whenever the extension is installed (see background/index.ts) so we are THE provider on
+ * this browser even before the vault is set up or while it is locked — a ceremony then opens our
+ * window to register/log in/unlock (ensureReady) instead of falling through to Windows Hello.
  */
 
 import type { SessionManager } from '../lib/session.js';
@@ -58,17 +59,23 @@ export class WebAuthnProxy {
   constructor(private session: SessionManager) {}
 
   /**
-   * If the vault is locked when a ceremony arrives, open our popup as a standalone window so the
-   * user can unlock, then wait (polling) until unlocked or a timeout. Returns false if still locked.
-   * This is what lets us intercept even while locked instead of falling through to Windows Hello.
+   * When a ceremony arrives, make sure the vault is ready to serve it: an account must be
+   * configured AND unlocked. If not, open our popup as a standalone window so the user can
+   * register/log in and/or unlock, then wait (polling) until ready or a timeout. Returns false on
+   * timeout. This is what lets us intercept even before setup / while locked instead of falling
+   * through to Windows Hello.
    */
-  private async ensureUnlocked(): Promise<boolean> {
-    if ((await this.session.getState()).unlocked) return true;
+  private async ensureReady(): Promise<boolean> {
+    const ready = async () => {
+      const s = await this.session.getState();
+      return s.configured && s.unlocked;
+    };
+    if (await ready()) return true;
     await this.openUnlockWindow();
     const deadline = Date.now() + 55_000; // stay under the RP's typical ~60s ceremony timeout
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 600));
-      if ((await this.session.getState()).unlocked) {
+      if (await ready()) {
         await this.closeUnlockWindow();
         return true;
       }
@@ -115,13 +122,20 @@ export class WebAuthnProxy {
 
   async attach(): Promise<void> {
     if (this.attached || typeof chrome.webAuthenticationProxy === 'undefined') return;
-    const err = await wap().attach();
-    if (err) {
-      // Another extension (or our own prior worker) holds the proxy.
-      console.warn('[pm] webAuthenticationProxy attach failed:', err);
-      return;
+    // Retry: right after an extension reload the *previous* worker instance can still hold the proxy
+    // slot for a moment, so a single attempt often fails with "already attached". Back off and retry
+    // so we reliably become the provider on cold boot instead of silently giving up (which would let
+    // the ceremony fall through to Windows Hello).
+    for (let i = 0; i < 8; i++) {
+      const err = await wap().attach();
+      if (!err) {
+        this.attached = true;
+        console.log('[pm] webAuthenticationProxy attached');
+        return;
+      }
+      console.warn(`[pm] webAuthenticationProxy attach failed (attempt ${i + 1}/8):`, err);
+      await new Promise((r) => setTimeout(r, 500));
     }
-    this.attached = true;
   }
 
   async detach(): Promise<void> {
@@ -134,7 +148,7 @@ export class WebAuthnProxy {
 
   private async onCreate(r: chrome.webAuthenticationProxy.CreateRequest): Promise<void> {
     try {
-      if (!(await this.ensureUnlocked())) throw domError('NotAllowedError', 'Vault is locked.');
+      if (!(await this.ensureReady())) throw domError('NotAllowedError', 'Vault not ready (locked or not set up).');
       const opts = JSON.parse(r.requestDetailsJson) as CreationOptionsJson;
       const prompt = await promptActiveTab('create', opts.rp?.id ?? '', { userName: opts.user?.name });
       const origin = prompt?.origin ?? (opts.rp?.id ? `https://${opts.rp.id}` : '');
@@ -176,7 +190,7 @@ export class WebAuthnProxy {
 
   private async onGet(r: chrome.webAuthenticationProxy.GetRequest): Promise<void> {
     try {
-      if (!(await this.ensureUnlocked())) throw domError('NotAllowedError', 'Vault is locked.');
+      if (!(await this.ensureReady())) throw domError('NotAllowedError', 'Vault not ready (locked or not set up).');
       const opts = JSON.parse(r.requestDetailsJson) as RequestOptionsJson;
       const allowIds = (opts.allowCredentials ?? []).map((c) => c.id);
       // Show the user which saved passkeys match this site so they can pick one.

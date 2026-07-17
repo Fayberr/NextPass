@@ -12,14 +12,13 @@ const session = new SessionManager();
 const waProxy = new WebAuthnProxy(session);
 waProxy.install();
 
-// Become the authoritative WebAuthn authority whenever an account is configured on this device —
-// even while locked — so passkey ceremonies never fall through to Windows Hello. A locked request
-// pops our vault to unlock first (see WebAuthnProxy.ensureUnlocked). We only step aside (detach)
-// when there is no account at all (e.g. after "forget").
+// Become THE authoritative WebAuthn authority whenever the extension is installed — even before the
+// vault is set up and even while it is locked — so passkey ceremonies never fall through to Windows
+// Hello. A not-ready request pops our window to register/log in/unlock first (WebAuthnProxy
+// .ensureReady). We deliberately do NOT detach on lock/forget: staying attached is what guarantees
+// interception on the very next ceremony.
 async function syncProxyAttachment(): Promise<void> {
-  const st = await session.getState();
-  if (st.configured) await waProxy.attach();
-  else await waProxy.detach();
+  await waProxy.attach();
 }
 
 // CRITICAL: attach on every worker boot, not just after a user action. The browser only routes a

@@ -117,6 +117,35 @@ export function Download(props: IconProps) {
   );
 }
 
+export function Pencil(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </Svg>
+  );
+}
+
+export function Trash(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </Svg>
+  );
+}
+
+export function Wand(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m15 4 1.5 1.5M3 21l9-9" />
+      <path d="M12.5 6.5 17 2m2 5 1.5 1.5M9 3l.7 1.8L11.5 5.5 9.7 6.2 9 8l-.7-1.8L6.5 5.5l1.8-.7z" />
+    </Svg>
+  );
+}
+
 export function ArrowLeft(props: IconProps) {
   return (
     <Svg {...props}>

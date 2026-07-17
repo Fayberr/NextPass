@@ -82,6 +82,14 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.createLogin(msg.fields);
         return { ok: true, kind: 'void' };
 
+      case 'update_login':
+        await session.updateLogin(msg.id, msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'delete_item':
+        await session.deleteItem(msg.id);
+        return { ok: true, kind: 'void' };
+
       case 'sync':
         return { ok: true, kind: 'sync', pulled: await session.sync() };
 

@@ -44,6 +44,11 @@ export async function cacheUpsert(records: ItemRecord[]): Promise<void> {
   await tx.done;
 }
 
+/** Hard-remove a single record from the local cache (after a server delete). */
+export async function cacheDelete(id: string): Promise<void> {
+  await (await db()).delete('items', id);
+}
+
 export async function cacheClear(): Promise<void> {
   const d = await db();
   await d.clear('items');

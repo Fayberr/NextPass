@@ -29,7 +29,7 @@ import {
   DEFAULT_SERVER_URL,
   type AccountMeta,
 } from './config.js';
-import { cacheClear, cacheGetAll, cacheUpsert } from './storage.js';
+import { cacheClear, cacheDelete, cacheGetAll, cacheUpsert } from './storage.js';
 import type {
   AutofillMatch,
   ItemSummary,
@@ -291,6 +291,29 @@ export class SessionManager {
     const rec = await this.api(acct).createItem(upsert);
     await cacheUpsert([rec]);
     this.decrypted.delete(rec.id);
+  }
+
+  /** Overwrite an existing login item's fields (re-encrypted under the vault key). */
+  async updateLogin(id: string, fields: LoginFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, 'login', fields);
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Soft-delete any item on the server and drop it from the local cache. */
+  async deleteItem(id: string): Promise<void> {
+    await this.hydrate();
+    this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    await this.api(acct).deleteItem(id);
+    await cacheDelete(id);
+    this.decrypted.delete(id);
   }
 
   // --- passkeys (Phase 2 WebAuthn shim) ---

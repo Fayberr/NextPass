@@ -6,8 +6,13 @@ import { VaultList } from './screens/VaultList.js';
 import { ItemDetail } from './screens/ItemDetail.js';
 import { AddLogin } from './screens/AddLogin.js';
 import type { VaultState } from '../lib/messages.js';
+import type { LoginFields } from '@pm/shared';
 
-type View = { name: 'list' } | { name: 'detail'; id: string } | { name: 'add' };
+type View =
+  | { name: 'list' }
+  | { name: 'detail'; id: string }
+  | { name: 'add' }
+  | { name: 'edit'; id: string; initial: LoginFields };
 
 export function App() {
   const [state, setState] = useState<VaultState | null>(null);
@@ -44,9 +49,25 @@ export function App() {
 
   switch (view.name) {
     case 'detail':
-      return <ItemDetail id={view.id} onBack={() => setView({ name: 'list' })} />;
+      return (
+        <ItemDetail
+          id={view.id}
+          onBack={() => setView({ name: 'list' })}
+          onEdit={(id, initial) => setView({ name: 'edit', id, initial })}
+          onDeleted={() => setView({ name: 'list' })}
+        />
+      );
     case 'add':
       return <AddLogin onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />;
+    case 'edit':
+      return (
+        <AddLogin
+          editId={view.id}
+          initial={view.initial}
+          onDone={() => setView({ name: 'detail', id: view.id })}
+          onCancel={() => setView({ name: 'detail', id: view.id })}
+        />
+      );
     default:
       return (
         <VaultList

@@ -40,6 +40,8 @@ export type Msg =
   | { kind: 'list_items' }
   | { kind: 'get_item'; id: string }
   | { kind: 'create_login'; fields: LoginFields }
+  | { kind: 'update_login'; id: string; fields: LoginFields }
+  | { kind: 'delete_item'; id: string }
   | { kind: 'sync' }
   | { kind: 'autofill_query'; url: string }
   | { kind: 'passkey_create'; req: PasskeyCreateReq }

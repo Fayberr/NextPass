@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Card } from '../ui.js';
-import { ArrowLeft, Check, Copy, Eye, EyeOff } from '../icons.js';
+import { ArrowLeft, Check, Copy, Eye, EyeOff, Pencil, Trash } from '../icons.js';
 import { send } from '../client.js';
 import type { LoginFields } from '@pm/shared';
 
@@ -40,10 +40,22 @@ function CopyRow({ label, value, secret }: { label: string; value: string; secre
   );
 }
 
-export function ItemDetail({ id, onBack }: { id: string; onBack: () => void }) {
+export function ItemDetail({
+  id,
+  onBack,
+  onEdit,
+  onDeleted,
+}: {
+  id: string;
+  onBack: () => void;
+  onEdit: (id: string, fields: LoginFields) => void;
+  onDeleted: () => void;
+}) {
   const [fields, setFields] = useState<LoginFields | null>(null);
   const [type, setType] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     send({ kind: 'get_item', id }).then((res) => {
@@ -56,16 +68,57 @@ export function ItemDetail({ id, onBack }: { id: string; onBack: () => void }) {
     });
   }, [id]);
 
+  async function del() {
+    setBusy(true);
+    const res = await send({ kind: 'delete_item', id });
+    setBusy(false);
+    if (res.ok) onDeleted();
+    else setError(res.error);
+  }
+
+  const editable = type === 'login';
+
   return (
     <div className="flex h-[500px] flex-col">
       <header className="flex items-center gap-2 border-b border-white/5 p-3">
         <Button variant="subtle" onClick={onBack}>
           <ArrowLeft size={16} /> Back
         </Button>
-        <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
-          {type}
-        </span>
+        <div className="ml-auto flex items-center gap-1">
+          {editable && fields && (
+            <Button variant="subtle" onClick={() => onEdit(id, fields)} title="Edit">
+              <Pencil size={16} />
+            </Button>
+          )}
+          <Button
+            variant="subtle"
+            onClick={() => setConfirmDel(true)}
+            title="Delete"
+            className="hover:text-red-400"
+          >
+            <Trash size={16} />
+          </Button>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
+            {type}
+          </span>
+        </div>
       </header>
+
+      {confirmDel && (
+        <div className="flex items-center gap-2 border-b border-red-500/20 bg-red-500/10 p-3">
+          <span className="flex-1 text-xs text-white/80">Delete this item permanently?</span>
+          <Button variant="subtle" onClick={() => setConfirmDel(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <button
+            onClick={del}
+            disabled={busy}
+            className="rounded-full bg-red-500/80 px-3 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-40"
+          >
+            {busy ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4">
         {error && <p className="text-xs text-red-400">{error}</p>}

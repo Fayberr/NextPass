@@ -1,21 +1,44 @@
 import { useEffect, useState } from 'react';
 import { Button, Field, Input } from '../ui.js';
-import { ArrowLeft } from '../icons.js';
+import { ArrowLeft, Copy, Check, Eye, EyeOff, Wand } from '../icons.js';
 import { send } from '../client.js';
-import type { LoginFields, MatchMode } from '@pm/shared';
+import { generatePassword, type LoginFields, type MatchMode } from '@pm/shared';
 
-/** Minimal "add login" form. Prefills the website from the active tab. */
-export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
-  const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [uri, setUri] = useState('');
-  const [matchMode, setMatchMode] = useState<MatchMode>('host');
+/**
+ * Add OR edit a login. When `editId`/`initial` are provided it edits in place (update_login);
+ * otherwise it creates a new item and prefills the website from the active tab.
+ */
+export function AddLogin({
+  onDone,
+  onCancel,
+  editId,
+  initial,
+}: {
+  onDone: () => void;
+  onCancel: () => void;
+  editId?: string;
+  initial?: LoginFields;
+}) {
+  const editing = !!editId;
+  const [name, setName] = useState(initial?.name ?? '');
+  const [username, setUsername] = useState(initial?.username ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [password, setPassword] = useState(initial?.password ?? '');
+  const [uri, setUri] = useState(initial?.uris?.[0] ?? '');
+  const [matchMode, setMatchMode] = useState<MatchMode>(initial?.matchMode ?? 'host');
+  const [showPw, setShowPw] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Generator options.
+  const [genOpen, setGenOpen] = useState(false);
+  const [glen, setGlen] = useState(20);
+  const [gSym, setGSym] = useState(true);
+  const [gDig, setGDig] = useState(true);
+
   useEffect(() => {
+    if (editing) return; // don't clobber the item's own website when editing
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.url && /^https?:/.test(tab.url)) {
         setUri(tab.url);
@@ -26,12 +49,24 @@ export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: (
         }
       }
     });
-  }, []);
+  }, [editing]);
+
+  function regen() {
+    setPassword(generatePassword({ length: glen, symbols: gSym, digits: gDig }));
+    setShowPw(true);
+  }
+
+  async function copyPw() {
+    await navigator.clipboard.writeText(password);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }
 
   async function save() {
     setBusy(true);
     setError(null);
     const fields: LoginFields = {
+      ...initial,
       name: name.trim() || uri || 'Untitled',
       username: username.trim() || undefined,
       email: email.trim() || undefined,
@@ -39,7 +74,9 @@ export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: (
       uris: uri.trim() ? [uri.trim()] : [],
       matchMode,
     };
-    const res = await send({ kind: 'create_login', fields });
+    const res = editing
+      ? await send({ kind: 'update_login', id: editId!, fields })
+      : await send({ kind: 'create_login', fields });
     setBusy(false);
     if (res.ok) onDone();
     else setError(res.error);
@@ -51,7 +88,7 @@ export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: (
         <Button variant="subtle" onClick={onCancel}>
           <ArrowLeft size={16} /> Cancel
         </Button>
-        <span className="text-sm font-semibold">New login</span>
+        <span className="text-sm font-semibold">{editing ? 'Edit login' : 'New login'}</span>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -64,9 +101,70 @@ export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: (
         <Field label="Email">
           <Input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
         </Field>
+
         <Field label="Password">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+          <div className="flex items-center gap-1.5">
+            <Input
+              type={showPw ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              className="font-mono"
+            />
+            <button
+              onClick={() => setShowPw((s) => !s)}
+              className="shrink-0 rounded-lg p-2 text-white/40 hover:text-white/80"
+              title={showPw ? 'Hide' : 'Reveal'}
+            >
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+            <button
+              onClick={copyPw}
+              className="shrink-0 rounded-lg p-2 text-white/40 hover:text-white/80"
+              title="Copy"
+            >
+              {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+            </button>
+            <button
+              onClick={() => setGenOpen((o) => !o)}
+              className="shrink-0 rounded-lg p-2 text-violet-soft hover:text-white"
+              title="Generate password"
+            >
+              <Wand size={16} />
+            </button>
+          </div>
+
+          {genOpen && (
+            <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-[11px] text-white/50">Length</span>
+                <input
+                  type="range"
+                  min={8}
+                  max={64}
+                  value={glen}
+                  onChange={(e) => setGlen(Number(e.target.value))}
+                  className="flex-1 accent-violet-soft"
+                />
+                <span className="w-6 text-right text-xs tabular-nums text-white/80">{glen}</span>
+              </div>
+              <div className="flex items-center gap-4 text-[11px] text-white/60">
+                <label className="flex items-center gap-1.5">
+                  <input type="checkbox" checked={gDig} onChange={(e) => setGDig(e.target.checked)} />
+                  0-9
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input type="checkbox" checked={gSym} onChange={(e) => setGSym(e.target.checked)} />
+                  Symbols
+                </label>
+                <Button variant="ghost" className="ml-auto px-3 py-1 text-xs" onClick={regen}>
+                  <Wand size={13} /> Generate
+                </Button>
+              </div>
+            </div>
+          )}
         </Field>
+
         <Field label="Website (URI)">
           <Input value={uri} onChange={(e) => setUri(e.target.value)} placeholder="https://…" />
         </Field>
@@ -88,7 +186,7 @@ export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: (
 
       <footer className="border-t border-white/5 p-3">
         <Button className="w-full" onClick={save} disabled={busy || !password}>
-          {busy ? 'Saving…' : 'Save login'}
+          {busy ? 'Saving…' : editing ? 'Save changes' : 'Save login'}
         </Button>
       </footer>
     </div>

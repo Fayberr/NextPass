@@ -6,14 +6,20 @@
 
 import {
   ApiClient,
+  b64url,
+  createPasskey,
   createRegistration,
   decryptItem,
   deriveAuthKeyHash,
   encryptItem,
+  fromB64url,
   itemMatchesUrl,
+  signAssertion,
+  toB64,
   unlockWithMasterPassword,
   type ItemRecord,
   type LoginFields,
+  type PasskeyFields,
 } from '@pm/shared';
 import {
   clearAccount,
@@ -24,7 +30,15 @@ import {
   type AccountMeta,
 } from './config.js';
 import { cacheClear, cacheGetAll, cacheUpsert } from './storage.js';
-import type { AutofillMatch, ItemSummary, VaultState } from './messages.js';
+import type {
+  AutofillMatch,
+  ItemSummary,
+  PasskeyCreateReq,
+  PasskeyCreateRes,
+  PasskeyGetReq,
+  PasskeyGetRes,
+  VaultState,
+} from './messages.js';
 
 const PLATFORM = 'extension';
 
@@ -217,6 +231,104 @@ export class SessionManager {
     const rec = await this.api(acct).createItem(upsert);
     await cacheUpsert([rec]);
     this.decrypted.delete(rec.id);
+  }
+
+  // --- passkeys (Phase 2 WebAuthn shim) ---
+
+  /** Decrypt every non-deleted passkey item into {record, fields}. */
+  private async passkeyItems(): Promise<{ record: ItemRecord; fields: PasskeyFields }[]> {
+    this.requireKey();
+    const out: { record: ItemRecord; fields: PasskeyFields }[] = [];
+    for (const r of await cacheGetAll()) {
+      if (r.deletedAt || r.type !== 'passkey') continue;
+      const { fields } = await this.decryptRecord(r);
+      out.push({ record: r, fields: fields as unknown as PasskeyFields });
+    }
+    return out;
+  }
+
+  /** navigator.credentials.create() — mint a passkey, store it as a vault item, return the attestation. */
+  async passkeyCreate(req: PasskeyCreateReq): Promise<PasskeyCreateRes> {
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+
+    const result = await createPasskey({
+      rpId: req.rpId,
+      origin: req.origin,
+      challenge: fromB64url(req.challenge),
+      userHandle: fromB64url(req.userHandle),
+      userName: req.userName,
+      userDisplayName: req.userDisplayName,
+    });
+
+    const label = req.userName ? `${req.rpId} — ${req.userName}` : req.rpId;
+    const fields: PasskeyFields = {
+      name: label,
+      rpId: req.rpId,
+      rpName: req.rpName,
+      userHandle: toB64(result.passkey.userHandle),
+      userName: req.userName,
+      userDisplayName: req.userDisplayName,
+      credentialId: b64url(result.passkey.credentialId),
+      privateKey: toB64(result.passkey.privateKeyPkcs8),
+      signCount: result.passkey.signCount,
+      createdAt: Date.now(),
+    };
+    const upsert = await encryptItem(key, 'passkey', fields);
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+
+    return {
+      credentialId: b64url(result.response.credentialId),
+      clientDataJSON: b64url(result.response.clientDataJSON),
+      attestationObject: b64url(result.response.attestationObject),
+      transports: ['internal', 'hybrid'],
+    };
+  }
+
+  /** navigator.credentials.get() — find a matching passkey, sign the assertion, bump the counter. */
+  async passkeyGet(req: PasskeyGetReq): Promise<PasskeyGetRes> {
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+
+    const candidates = (await this.passkeyItems()).filter((p) => p.fields.rpId === req.rpId);
+    if (candidates.length === 0) throw new Error(`No passkey for ${req.rpId}.`);
+
+    // Honor allowCredentials if the RP restricts to specific credential IDs.
+    const allow = new Set(req.allowCredentials);
+    const chosen =
+      allow.size > 0
+        ? candidates.find((p) => allow.has(p.fields.credentialId)) ?? null
+        : candidates[0];
+    if (!chosen) throw new Error(`No matching passkey for ${req.rpId}.`);
+
+    const assertion = await signAssertion(
+      { rpId: req.rpId, origin: req.origin, challenge: fromB64url(req.challenge) },
+      {
+        credentialId: fromB64url(chosen.fields.credentialId),
+        privateKeyPkcs8: fromB64url(chosen.fields.privateKey),
+        userHandle: fromB64url(chosen.fields.userHandle),
+        signCount: chosen.fields.signCount,
+      },
+    );
+
+    // Persist the incremented signature counter (clone-detection hygiene).
+    const updated: PasskeyFields = { ...chosen.fields, signCount: assertion.newSignCount };
+    const upsert = await encryptItem(key, 'passkey', updated);
+    const rec = await this.api(acct).updateItem(chosen.record.id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+
+    return {
+      credentialId: b64url(assertion.credentialId),
+      clientDataJSON: b64url(assertion.clientDataJSON),
+      authenticatorData: b64url(assertion.authenticatorData),
+      signature: b64url(assertion.signature),
+      userHandle: b64url(assertion.userHandle),
+    };
   }
 
   // --- autofill ---

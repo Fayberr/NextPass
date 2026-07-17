@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { cborEncode, U, N, T, B } from '../src/cbor.js';
-import { createPasskey, signAssertion, b64url, AAGUID } from '../src/webauthn.js';
+import { createPasskey, signAssertion, b64url, fromB64url, AAGUID } from '../src/webauthn.js';
 import { sha256, utf8, randomBytes } from '../src/crypto.js';
 
 const subtle = globalThis.crypto.subtle;
@@ -59,6 +59,15 @@ describe('CBOR encoder', () => {
     expect([...cborEncode(T('fmt'))]).toEqual([0x63, 0x66, 0x6d, 0x74]);
     expect([...cborEncode({ map: [] })]).toEqual([0xa0]);
     expect([...cborEncode(B(new Uint8Array([1, 2])))]).toEqual([0x42, 1, 2]);
+  });
+});
+
+describe('base64url round-trip', () => {
+  it('fromB64url inverts b64url for arbitrary byte lengths (padding edge cases)', () => {
+    for (const len of [0, 1, 2, 3, 16, 31, 32, 65]) {
+      const bytes = randomBytes(len);
+      expect([...fromB64url(b64url(bytes))]).toEqual([...bytes]);
+    }
   });
 });
 

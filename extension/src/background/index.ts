@@ -58,6 +58,12 @@ async function handle(msg: Msg): Promise<MsgResult> {
       case 'autofill_query':
         return { ok: true, kind: 'autofill', matches: await session.autofillQuery(msg.url) };
 
+      case 'passkey_create':
+        return { ok: true, kind: 'passkey_created', res: await session.passkeyCreate(msg.req) };
+
+      case 'passkey_get':
+        return { ok: true, kind: 'passkey_asserted', res: await session.passkeyGet(msg.req) };
+
       default:
         return { ok: false, error: `Unknown message: ${(msg as { kind: string }).kind}` };
     }

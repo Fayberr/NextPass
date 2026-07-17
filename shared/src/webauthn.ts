@@ -7,7 +7,7 @@
  * no attestation CA). The private key is exported as PKCS#8 and stored, wrapped, as a vault item.
  */
 
-import { randomBytes, sha256, toB64, utf8 } from './crypto.js';
+import { fromB64, randomBytes, sha256, toB64, utf8 } from './crypto.js';
 import { B, N, T, U, cborEncode, type CborValue } from './cbor.js';
 
 /** Our authenticator's fixed AAGUID (16 bytes). Identifies "Password Manager" passkeys. */
@@ -22,6 +22,13 @@ const FLAG_AT = 0x40; // attested credential data included
 // --- base64url (WebAuthn clientDataJSON uses unpadded base64url) ---
 export function b64url(bytes: Uint8Array): string {
   return toB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** Decode a base64url (or plain base64) string back to bytes. */
+export function fromB64url(s: string): Uint8Array {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  return fromB64(b64 + pad);
 }
 
 // --- small byte helpers ---

@@ -27,6 +27,22 @@ export default defineManifest({
       run_at: 'document_idle',
       all_frames: true,
     },
+    // WebAuthn shim: the inject script replaces navigator.credentials in the page's own JS
+    // context (world: MAIN); the bridge relays to the background from the isolated world.
+    // Both at document_start so the override is in place before any RP script runs.
+    {
+      matches: ['<all_urls>'],
+      js: ['src/content/webauthn-inject.ts'],
+      run_at: 'document_start',
+      all_frames: true,
+      world: 'MAIN',
+    },
+    {
+      matches: ['<all_urls>'],
+      js: ['src/content/webauthn-bridge.ts'],
+      run_at: 'document_start',
+      all_frames: true,
+    },
   ],
   // Argon2id (hash-wasm) runs as WebAssembly in the service worker; MV3's default CSP
   // (script-src 'self') blocks WASM, so we opt in with the MV3-approved 'wasm-unsafe-eval'

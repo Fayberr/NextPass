@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Input } from '../ui.js';
+import { Lock, Plus, RefreshCw, Star } from '../icons.js';
 import { send } from '../client.js';
 import type { ItemSummary } from '../../lib/messages.js';
 
@@ -61,10 +62,10 @@ export function VaultList({
         </span>
         <div className="ml-auto flex gap-1">
           <Button variant="subtle" onClick={doSync} disabled={syncing} title="Sync">
-            {syncing ? '…' : '⟳'}
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
           </Button>
           <Button variant="subtle" onClick={onLock} title="Lock">
-            🔒
+            <Lock size={16} />
           </Button>
         </div>
       </header>
@@ -104,7 +105,7 @@ export function VaultList({
                     <div className="truncate text-xs text-white/40">{item.username}</div>
                   )}
                 </div>
-                {item.favorite && <span className="text-xs text-violet-soft">★</span>}
+                {item.favorite && <Star size={14} filled className="text-violet-soft" />}
               </button>
             );
           })
@@ -113,7 +114,7 @@ export function VaultList({
 
       <footer className="border-t border-white/5 p-3">
         <Button className="w-full" onClick={onAdd}>
-          + Add login
+          <Plus size={16} /> Add login
         </Button>
       </footer>
     </div>

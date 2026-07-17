@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Card } from '../ui.js';
+import { ArrowLeft, Check, Copy, Eye, EyeOff } from '../icons.js';
 import { send } from '../client.js';
 import type { LoginFields } from '@pm/shared';
 
@@ -23,12 +24,16 @@ function CopyRow({ label, value, secret }: { label: string; value: string; secre
           {shown}
         </span>
         {secret && (
-          <button onClick={() => setRevealed((r) => !r)} className="text-xs text-white/40 hover:text-white/70">
-            {revealed ? '🙈' : '👁'}
+          <button
+            onClick={() => setRevealed((r) => !r)}
+            className="text-white/40 hover:text-white/70"
+            title={revealed ? 'Hide' : 'Reveal'}
+          >
+            {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         )}
-        <button onClick={copy} className="text-xs text-white/40 hover:text-white/70" title="Copy">
-          {copied ? <span className="text-emerald-400">✓</span> : '⎘'}
+        <button onClick={copy} className="text-white/40 hover:text-white/70" title="Copy">
+          {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
         </button>
       </div>
     </div>
@@ -55,7 +60,7 @@ export function ItemDetail({ id, onBack }: { id: string; onBack: () => void }) {
     <div className="flex h-[500px] flex-col">
       <header className="flex items-center gap-2 border-b border-white/5 p-3">
         <Button variant="subtle" onClick={onBack}>
-          ← Back
+          <ArrowLeft size={16} /> Back
         </Button>
         <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
           {type}

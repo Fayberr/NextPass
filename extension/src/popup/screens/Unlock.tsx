@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button, Card, Field, Input } from '../ui.js';
+import { ShieldCheck } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SERVER_URL } from '../../lib/config.js';
 import type { VaultState } from '../../lib/messages.js';
@@ -80,8 +81,8 @@ export function Unlock({
   return (
     <div className="flex min-h-[500px] flex-col justify-center p-6">
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-glow to-indigo-500 shadow-glass">
-          <span className="text-2xl">🔐</span>
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-glow to-indigo-500 text-white shadow-glass">
+          <ShieldCheck size={28} />
         </div>
         <h1 className="text-xl font-semibold tracking-tight">Password Manager</h1>
         <p className="mt-1 text-xs text-white/40">

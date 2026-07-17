@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Field, Input } from '../ui.js';
+import { ArrowLeft } from '../icons.js';
 import { send } from '../client.js';
 import type { LoginFields, MatchMode } from '@pm/shared';
 
@@ -48,7 +49,7 @@ export function AddLogin({ onDone, onCancel }: { onDone: () => void; onCancel: (
     <div className="flex h-[500px] flex-col">
       <header className="flex items-center gap-2 border-b border-white/5 p-3">
         <Button variant="subtle" onClick={onCancel}>
-          ← Cancel
+          <ArrowLeft size={16} /> Cancel
         </Button>
         <span className="text-sm font-semibold">New login</span>
       </header>

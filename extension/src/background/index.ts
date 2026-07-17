@@ -22,6 +22,15 @@ async function syncProxyAttachment(): Promise<void> {
   else await waProxy.detach();
 }
 
+// CRITICAL: attach on every worker boot, not just after a user action. The browser only routes a
+// passkey ceremony to us if we are ALREADY attached when it fires; after an extension reload or a
+// browser restart the worker starts cold with no attachment, so without this the very first
+// ceremony would fall through to Windows Hello. onStartup covers browser launch; onInstalled covers
+// install/reload; the bare call covers any other cold start (event-driven wake).
+void syncProxyAttachment();
+chrome.runtime.onStartup.addListener(() => void syncProxyAttachment());
+chrome.runtime.onInstalled.addListener(() => void syncProxyAttachment());
+
 async function handle(msg: Msg): Promise<MsgResult> {
   try {
     switch (msg.kind) {

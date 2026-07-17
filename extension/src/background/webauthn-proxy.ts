@@ -13,7 +13,13 @@
  */
 
 import type { SessionManager } from '../lib/session.js';
-import type { PasskeyCreateReq, PasskeyGetReq, WaPromptRequest, WaPromptResponse } from '../lib/messages.js';
+import type {
+  PasskeyCreateReq,
+  PasskeyGetReq,
+  WaPromptPasskey,
+  WaPromptRequest,
+  WaPromptResponse,
+} from '../lib/messages.js';
 
 // Shapes of the JSON handed to us by the proxy (WebAuthn "JSON" form: binary fields are base64url).
 interface CreationOptionsJson {
@@ -31,10 +37,14 @@ interface RequestOptionsJson {
 const wap = () => chrome.webAuthenticationProxy;
 
 /** Ask the active tab for its origin + user approval. Returns null if no reachable content script. */
-async function promptActiveTab(op: 'create' | 'get', rpId: string, userName?: string): Promise<WaPromptResponse | null> {
+async function promptActiveTab(
+  op: 'create' | 'get',
+  rpId: string,
+  opts?: { userName?: string; passkeys?: WaPromptPasskey[] },
+): Promise<WaPromptResponse | null> {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab?.id) return null;
-  const msg: WaPromptRequest = { kind: 'wa_prompt', op, rpId, userName };
+  const msg: WaPromptRequest = { kind: 'wa_prompt', op, rpId, userName: opts?.userName, passkeys: opts?.passkeys };
   try {
     return (await chrome.tabs.sendMessage(tab.id, msg)) as WaPromptResponse;
   } catch {
@@ -126,7 +136,7 @@ export class WebAuthnProxy {
     try {
       if (!(await this.ensureUnlocked())) throw domError('NotAllowedError', 'Vault is locked.');
       const opts = JSON.parse(r.requestDetailsJson) as CreationOptionsJson;
-      const prompt = await promptActiveTab('create', opts.rp?.id ?? '', opts.user?.name);
+      const prompt = await promptActiveTab('create', opts.rp?.id ?? '', { userName: opts.user?.name });
       const origin = prompt?.origin ?? (opts.rp?.id ? `https://${opts.rp.id}` : '');
       if (prompt && !prompt.approved) throw domError('NotAllowedError', 'User declined the passkey.');
       if (!origin) throw domError('NotAllowedError', 'Could not determine request origin.');
@@ -168,17 +178,22 @@ export class WebAuthnProxy {
     try {
       if (!(await this.ensureUnlocked())) throw domError('NotAllowedError', 'Vault is locked.');
       const opts = JSON.parse(r.requestDetailsJson) as RequestOptionsJson;
-      const prompt = await promptActiveTab('get', opts.rpId ?? '');
+      const allowIds = (opts.allowCredentials ?? []).map((c) => c.id);
+      // Show the user which saved passkeys match this site so they can pick one.
+      const passkeys = await this.session.passkeyList(opts.rpId ?? '', allowIds);
+      const prompt = await promptActiveTab('get', opts.rpId ?? '', { passkeys });
       const origin = prompt?.origin ?? (opts.rpId ? `https://${opts.rpId}` : '');
       if (prompt && !prompt.approved) throw domError('NotAllowedError', 'User declined the passkey.');
       if (!origin) throw domError('NotAllowedError', 'Could not determine request origin.');
 
       const rpId = opts.rpId ?? new URL(origin).hostname;
+      // If the user picked a specific passkey in the card, restrict the assertion to it.
+      const chosen = prompt?.credentialId ? [prompt.credentialId] : allowIds;
       const req: PasskeyGetReq = {
         rpId,
         origin,
         challenge: opts.challenge,
-        allowCredentials: (opts.allowCredentials ?? []).map((c) => c.id),
+        allowCredentials: chosen,
       };
       const res = await this.session.passkeyGet(req);
       const responseJson = JSON.stringify({

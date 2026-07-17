@@ -352,6 +352,20 @@ export class SessionManager {
     };
   }
 
+  /** List the saved passkeys matching a site (honoring allowCredentials), for the approval card. */
+  async passkeyList(rpId: string, allowCredentials: string[] = []): Promise<{ credentialId: string; label: string }[]> {
+    await this.hydrate();
+    this.requireKey();
+    const allow = new Set(allowCredentials);
+    return (await this.passkeyItems())
+      .filter((p) => p.fields.rpId === rpId)
+      .filter((p) => allow.size === 0 || allow.has(p.fields.credentialId))
+      .map((p) => ({
+        credentialId: p.fields.credentialId,
+        label: p.fields.userName || p.fields.userDisplayName || p.fields.rpId,
+      }));
+  }
+
   /** navigator.credentials.get() — find a matching passkey, sign the assertion, bump the counter. */
   async passkeyGet(req: PasskeyGetReq): Promise<PasskeyGetRes> {
     await this.hydrate();

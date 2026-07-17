@@ -102,15 +102,23 @@ export interface PasskeyGetRes {
  * to (a) obtain the page's true origin — the webAuthenticationProxy events don't include it — and
  * (b) show the in-page approval prompt for a passkey ceremony.
  */
+export interface WaPromptPasskey {
+  credentialId: string; // base64url
+  label: string; // human-friendly (userName / displayName / rpId)
+}
 export interface WaPromptRequest {
   kind: 'wa_prompt';
   op: 'create' | 'get';
   rpId: string;
   userName?: string;
+  /** For 'get': the saved passkeys matching this site, for the user to choose from. */
+  passkeys?: WaPromptPasskey[];
 }
 export interface WaPromptResponse {
   approved: boolean;
   origin: string;
+  /** For 'get': the credentialId the user picked (base64url), if a choice was offered. */
+  credentialId?: string;
 }
 
 export interface AutofillMatch {

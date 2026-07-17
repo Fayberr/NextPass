@@ -28,6 +28,12 @@ export default defineManifest({
       all_frames: true,
     },
   ],
+  // Argon2id (hash-wasm) runs as WebAssembly in the service worker; MV3's default CSP
+  // (script-src 'self') blocks WASM, so we opt in with the MV3-approved 'wasm-unsafe-eval'
+  // keyword (allows WebAssembly only — NOT arbitrary eval/remote script).
+  content_security_policy: {
+    extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+  },
   permissions: ['storage', 'activeTab', 'scripting', 'tabs'],
   host_permissions: [
     'http://localhost:8787/*',

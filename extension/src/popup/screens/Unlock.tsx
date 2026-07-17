@@ -23,6 +23,7 @@ export function Unlock({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const configured = state.configured;
 
@@ -109,12 +110,18 @@ export function Unlock({
 
         {!configured && (
           <>
-            <Field label="Server URL">
-              <Input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="http://localhost:8787" />
-            </Field>
             <Field label="Email or username">
               <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
             </Field>
+            {showAdvanced && (
+              <Field label="Server URL">
+                <Input
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  placeholder="http://localhost:8787"
+                />
+              </Field>
+            )}
           </>
         )}
 
@@ -134,6 +141,15 @@ export function Unlock({
         <Button className="w-full" onClick={submit} disabled={busy || !password || (!configured && !identifier)}>
           {busy ? 'Working…' : configured ? 'Unlock' : mode === 'register' ? 'Create vault' : 'Log in'}
         </Button>
+
+        {!configured && (
+          <button
+            onClick={() => setShowAdvanced((s) => !s)}
+            className="mt-3 block w-full text-center text-xs text-white/25 hover:text-white/50"
+          >
+            {showAdvanced ? 'Hide advanced' : 'Advanced'}
+          </button>
+        )}
 
         {configured && (
           <button

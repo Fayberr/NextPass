@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Field, Input } from '../ui.js';
 import { ArrowLeft, Copy, Check, Eye, EyeOff, Wand } from '../icons.js';
 import { send } from '../client.js';
+import { copyWithClear } from '../clipboard.js';
 import { generatePassword, type LoginFields, type MatchMode } from '@pm/shared';
 
 /**
@@ -26,6 +27,7 @@ export function AddLogin({
   const [password, setPassword] = useState(initial?.password ?? '');
   const [uri, setUri] = useState(initial?.uris?.[0] ?? '');
   const [matchMode, setMatchMode] = useState<MatchMode>(initial?.matchMode ?? 'host');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
   const [showPw, setShowPw] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,7 +59,7 @@ export function AddLogin({
   }
 
   async function copyPw() {
-    await navigator.clipboard.writeText(password);
+    await copyWithClear(password);
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   }
@@ -73,6 +75,7 @@ export function AddLogin({
       password: password || undefined,
       uris: uri.trim() ? [uri.trim()] : [],
       matchMode,
+      notes: notes.trim() || undefined,
     };
     const res = editing
       ? await send({ kind: 'update_login', id: editId!, fields })
@@ -179,6 +182,16 @@ export function AddLogin({
             <option value="exact">Exact URL</option>
             <option value="never">Never autofill</option>
           </select>
+        </Field>
+
+        <Field label="Notes">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="Optional notes…"
+            className="w-full resize-none rounded-xl border border-white/10 bg-ink-700 px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/30"
+          />
         </Field>
 
         {error && <p className="text-xs text-red-400">{error}</p>}

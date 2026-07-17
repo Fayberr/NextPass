@@ -5,6 +5,9 @@ import { Recovery } from './screens/Recovery.js';
 import { VaultList } from './screens/VaultList.js';
 import { ItemDetail } from './screens/ItemDetail.js';
 import { AddLogin } from './screens/AddLogin.js';
+import { Generator } from './screens/Generator.js';
+import { Health } from './screens/Health.js';
+import { Settings } from './screens/Settings.js';
 import type { VaultState } from '../lib/messages.js';
 import type { LoginFields } from '@pm/shared';
 
@@ -12,7 +15,10 @@ type View =
   | { name: 'list' }
   | { name: 'detail'; id: string }
   | { name: 'add' }
-  | { name: 'edit'; id: string; initial: LoginFields };
+  | { name: 'edit'; id: string; initial: LoginFields }
+  | { name: 'generator' }
+  | { name: 'health' }
+  | { name: 'settings' };
 
 export function App() {
   const [state, setState] = useState<VaultState | null>(null);
@@ -59,6 +65,17 @@ export function App() {
       );
     case 'add':
       return <AddLogin onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />;
+    case 'generator':
+      return <Generator onBack={() => setView({ name: 'list' })} />;
+    case 'health':
+      return (
+        <Health
+          onBack={() => setView({ name: 'list' })}
+          onSelect={(id) => setView({ name: 'detail', id })}
+        />
+      );
+    case 'settings':
+      return <Settings onBack={() => setView({ name: 'list' })} />;
     case 'edit':
       return (
         <AddLogin
@@ -73,6 +90,9 @@ export function App() {
         <VaultList
           onSelect={(id) => setView({ name: 'detail', id })}
           onAdd={() => setView({ name: 'add' })}
+          onGenerator={() => setView({ name: 'generator' })}
+          onHealth={() => setView({ name: 'health' })}
+          onSettings={() => setView({ name: 'settings' })}
           onLock={async () => {
             await send({ kind: 'lock' });
             await refresh();

@@ -50,7 +50,7 @@ export default defineManifest({
   content_security_policy: {
     extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
   },
-  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'webAuthenticationProxy'],
+  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'alarms', 'webAuthenticationProxy'],
   host_permissions: [
     'http://localhost:8787/*',
     'http://127.0.0.1:8787/*',

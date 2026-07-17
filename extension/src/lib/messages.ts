@@ -4,7 +4,8 @@
  * memory and only ever returns decrypted field data on explicit request.
  */
 
-import type { LoginFields } from '@pm/shared';
+import type { AuditReport, LoginFields } from '@pm/shared';
+import type { Settings } from './settings.js';
 
 export interface VaultState {
   configured: boolean; // an account exists on this device
@@ -42,6 +43,10 @@ export type Msg =
   | { kind: 'create_login'; fields: LoginFields }
   | { kind: 'update_login'; id: string; fields: LoginFields }
   | { kind: 'delete_item'; id: string }
+  | { kind: 'set_favorite'; id: string; favorite: boolean }
+  | { kind: 'audit' }
+  | { kind: 'get_settings' }
+  | { kind: 'set_settings'; patch: Partial<Settings> }
   | { kind: 'sync' }
   | { kind: 'autofill_query'; url: string }
   | { kind: 'passkey_create'; req: PasskeyCreateReq }
@@ -50,9 +55,11 @@ export type Msg =
 export type MsgResult =
   | { ok: true; kind: 'state'; state: VaultState; recovery?: string }
   | { ok: true; kind: 'items'; items: ItemSummary[] }
-  | { ok: true; kind: 'item'; id: string; type: string; fields: unknown }
+  | { ok: true; kind: 'item'; id: string; type: string; fields: unknown; favorite: boolean }
   | { ok: true; kind: 'sync'; pulled: number }
   | { ok: true; kind: 'autofill'; matches: AutofillMatch[] }
+  | { ok: true; kind: 'audit'; report: AuditReport }
+  | { ok: true; kind: 'settings'; settings: Settings }
   | { ok: true; kind: 'passkey_created'; res: PasskeyCreateRes }
   | { ok: true; kind: 'passkey_asserted'; res: PasskeyGetRes }
   | { ok: true; kind: 'void' }

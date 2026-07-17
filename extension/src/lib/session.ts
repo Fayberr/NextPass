@@ -14,7 +14,10 @@ import {
   encryptItem,
   fromB64url,
   itemMatchesUrl,
+  auditVault,
   signAssertion,
+  type AuditInput,
+  type AuditReport,
   toB64,
   unlockWithMasterPassword,
   type ItemRecord,
@@ -272,14 +275,14 @@ export class SessionManager {
     return out;
   }
 
-  async getItem(id: string): Promise<{ type: string; fields: unknown }> {
+  async getItem(id: string): Promise<{ type: string; fields: unknown; favorite: boolean }> {
     await this.hydrate();
     this.requireKey();
     const records = await cacheGetAll();
     const rec = records.find((r) => r.id === id);
     if (!rec) throw new Error('Item not found.');
     const { fields } = await this.decryptRecord(rec);
-    return { type: rec.type, fields };
+    return { type: rec.type, fields, favorite: rec.favorite };
   }
 
   async createLogin(fields: LoginFields): Promise<void> {
@@ -293,16 +296,59 @@ export class SessionManager {
     this.decrypted.delete(rec.id);
   }
 
-  /** Overwrite an existing login item's fields (re-encrypted under the vault key). */
+  /** Overwrite an existing login item's fields (re-encrypted under the vault key). Preserves
+   *  metadata (favorite / tags / folder) that isn't part of the editable field set. */
   async updateLogin(id: string, fields: LoginFields): Promise<void> {
     await this.hydrate();
     const key = this.requireKey();
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
-    const upsert = await encryptItem(key, 'login', fields);
+    const prev = (await cacheGetAll()).find((r) => r.id === id);
+    const upsert = await encryptItem(key, 'login', fields, {
+      favorite: prev?.favorite,
+      tags: prev?.tags,
+      folderId: prev?.folderId,
+    });
     const rec = await this.api(acct).updateItem(id, upsert);
     await cacheUpsert([rec]);
     this.decrypted.delete(rec.id);
+  }
+
+  /** Toggle/set the favorite flag on any item (re-encrypts to keep the metadata authoritative). */
+  async setFavorite(id: string, favorite: boolean): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const rec0 = (await cacheGetAll()).find((r) => r.id === id);
+    if (!rec0) throw new Error('Item not found.');
+    const { fields } = await this.decryptRecord(rec0);
+    const upsert = await encryptItem(key, rec0.type, fields, {
+      favorite,
+      tags: rec0.tags,
+      folderId: rec0.folderId,
+    });
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Offline password-health audit over all decrypted logins. Never leaves the device. */
+  async audit(): Promise<AuditReport> {
+    await this.hydrate();
+    this.requireKey();
+    const inputs: AuditInput[] = [];
+    for (const r of await cacheGetAll()) {
+      if (r.deletedAt || r.type !== 'login') continue;
+      const { fields } = await this.decryptRecord(r);
+      inputs.push({
+        id: r.id,
+        name: (fields.name as string) ?? '(no name)',
+        password: fields.password as string | undefined,
+        updatedAt: r.updatedAt,
+      });
+    }
+    return auditVault(inputs);
   }
 
   /** Soft-delete any item on the server and drop it from the local cache. */

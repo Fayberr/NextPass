@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Input } from '../ui.js';
-import { Lock, Plus, RefreshCw, Star } from '../icons.js';
+import { Lock, Plus, RefreshCw, Star, KeyRound, ShieldCheck, Settings } from '../icons.js';
 import { send } from '../client.js';
 import type { ItemSummary } from '../../lib/messages.js';
 
@@ -19,10 +19,16 @@ export function VaultList({
   onSelect,
   onAdd,
   onLock,
+  onGenerator,
+  onHealth,
+  onSettings,
 }: {
   onSelect: (id: string) => void;
   onAdd: () => void;
   onLock: () => void;
+  onGenerator: () => void;
+  onHealth: () => void;
+  onSettings: () => void;
 }) {
   const [items, setItems] = useState<ItemSummary[]>([]);
   const [q, setQ] = useState('');
@@ -40,6 +46,13 @@ export function VaultList({
     await send({ kind: 'sync' });
     await load();
     setSyncing(false);
+  }
+
+  async function toggleFav(id: string, favorite: boolean) {
+    // Optimistic: flip locally, then persist + reload to reflect re-sorting.
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, favorite } : i)));
+    await send({ kind: 'set_favorite', id, favorite });
+    await load();
   }
 
   useEffect(() => {
@@ -61,8 +74,17 @@ export function VaultList({
           {items.length}
         </span>
         <div className="ml-auto flex gap-1">
+          <Button variant="subtle" onClick={onGenerator} title="Password generator">
+            <KeyRound size={16} />
+          </Button>
+          <Button variant="subtle" onClick={onHealth} title="Password health">
+            <ShieldCheck size={16} />
+          </Button>
           <Button variant="subtle" onClick={doSync} disabled={syncing} title="Sync">
             <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
+          </Button>
+          <Button variant="subtle" onClick={onSettings} title="Settings">
+            <Settings size={16} />
           </Button>
           <Button variant="subtle" onClick={onLock} title="Lock">
             <Lock size={16} />
@@ -105,7 +127,20 @@ export function VaultList({
                     <div className="truncate text-xs text-white/40">{item.username}</div>
                   )}
                 </div>
-                {item.favorite && <Star size={14} filled className="text-violet-soft" />}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  title={item.favorite ? 'Unfavorite' : 'Favorite'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void toggleFav(item.id, !item.favorite);
+                  }}
+                  className={`shrink-0 rounded-md p-1 transition hover:bg-white/10 ${
+                    item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
+                  }`}
+                >
+                  <Star size={14} filled={item.favorite} />
+                </span>
               </button>
             );
           })

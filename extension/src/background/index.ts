@@ -7,10 +7,33 @@
 import { SessionManager } from '../lib/session.js';
 import { WebAuthnProxy } from './webauthn-proxy.js';
 import type { Msg, MsgResult } from '../lib/messages.js';
+import { getSettings, setSettings } from '../lib/settings.js';
 
 const session = new SessionManager();
 const waProxy = new WebAuthnProxy(session);
 waProxy.install();
+
+// --- auto-lock ---------------------------------------------------------------------------------
+// A chrome.alarms timer locks the vault after N minutes of inactivity. Every UI message counts as
+// activity and re-arms the alarm. autoLockMinutes = 0 disables it. The alarm survives worker
+// teardown (unlike a setTimeout), so the lock still fires even if the worker slept in between.
+const AUTO_LOCK_ALARM = 'pm-auto-lock';
+
+async function scheduleAutoLock(): Promise<void> {
+  const { autoLockMinutes } = await getSettings();
+  await chrome.alarms.clear(AUTO_LOCK_ALARM);
+  if (autoLockMinutes > 0) {
+    chrome.alarms.create(AUTO_LOCK_ALARM, { delayInMinutes: autoLockMinutes });
+  }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== AUTO_LOCK_ALARM) return;
+  void (async () => {
+    await session.lock();
+    await syncProxyAttachment();
+  })();
+});
 
 // Become THE authoritative WebAuthn authority whenever the extension is installed — even before the
 // vault is set up and even while it is locked — so passkey ceremonies never fall through to Windows
@@ -74,8 +97,8 @@ async function handle(msg: Msg): Promise<MsgResult> {
         return { ok: true, kind: 'items', items: await session.listItems() };
 
       case 'get_item': {
-        const { type, fields } = await session.getItem(msg.id);
-        return { ok: true, kind: 'item', id: msg.id, type, fields };
+        const { type, fields, favorite } = await session.getItem(msg.id);
+        return { ok: true, kind: 'item', id: msg.id, type, fields, favorite };
       }
 
       case 'create_login':
@@ -89,6 +112,22 @@ async function handle(msg: Msg): Promise<MsgResult> {
       case 'delete_item':
         await session.deleteItem(msg.id);
         return { ok: true, kind: 'void' };
+
+      case 'set_favorite':
+        await session.setFavorite(msg.id, msg.favorite);
+        return { ok: true, kind: 'void' };
+
+      case 'audit':
+        return { ok: true, kind: 'audit', report: await session.audit() };
+
+      case 'get_settings':
+        return { ok: true, kind: 'settings', settings: await getSettings() };
+
+      case 'set_settings': {
+        const settings = await setSettings(msg.patch);
+        await scheduleAutoLock();
+        return { ok: true, kind: 'settings', settings };
+      }
 
       case 'sync':
         return { ok: true, kind: 'sync', pulled: await session.sync() };
@@ -112,6 +151,12 @@ async function handle(msg: Msg): Promise<MsgResult> {
 }
 
 chrome.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
-  handle(msg).then(sendResponse);
+  handle(msg).then((res) => {
+    // Any successful interaction with an unlocked vault counts as activity: re-arm the auto-lock.
+    void (async () => {
+      if ((await session.getState()).unlocked) await scheduleAutoLock();
+    })();
+    sendResponse(res);
+  });
   return true; // keep the channel open for the async response
 });

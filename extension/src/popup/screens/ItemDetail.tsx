@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Button, Card } from '../ui.js';
-import { ArrowLeft, Check, Copy, Eye, EyeOff, Pencil, Trash } from '../icons.js';
+import { ArrowLeft, Check, Copy, Eye, EyeOff, Pencil, Trash, Star } from '../icons.js';
 import { send } from '../client.js';
+import { copyWithClear } from '../clipboard.js';
 import type { LoginFields } from '@pm/shared';
 
 function CopyRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
@@ -9,7 +10,7 @@ function CopyRow({ label, value, secret }: { label: string; value: string; secre
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(value);
+    await copyWithClear(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   }
@@ -53,6 +54,7 @@ export function ItemDetail({
 }) {
   const [fields, setFields] = useState<LoginFields | null>(null);
   const [type, setType] = useState('');
+  const [favorite, setFavorite] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,11 +64,18 @@ export function ItemDetail({
       if (res.ok && res.kind === 'item') {
         setFields(res.fields as LoginFields);
         setType(res.type);
+        setFavorite(res.favorite);
       } else if (!res.ok) {
         setError(res.error);
       }
     });
   }, [id]);
+
+  async function toggleFav() {
+    const next = !favorite;
+    setFavorite(next);
+    await send({ kind: 'set_favorite', id, favorite: next });
+  }
 
   async function del() {
     setBusy(true);
@@ -85,6 +94,14 @@ export function ItemDetail({
           <ArrowLeft size={16} /> Back
         </Button>
         <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant="subtle"
+            onClick={toggleFav}
+            title={favorite ? 'Unfavorite' : 'Favorite'}
+            className={favorite ? 'text-violet-soft' : undefined}
+          >
+            <Star size={16} filled={favorite} />
+          </Button>
           {editable && fields && (
             <Button variant="subtle" onClick={() => onEdit(id, fields)} title="Edit">
               <Pencil size={16} />

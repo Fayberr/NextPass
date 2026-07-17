@@ -6,12 +6,15 @@
   "type": "module",
   "workspaces": [
     "shared",
-    "server"
+    "server",
+    "extension"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "dev:server": "npm run dev --workspace @pm/server"
+    "dev:server": "npm run dev --workspace @pm/server",
+    "dev:ext": "npm run dev --workspace @pm/extension",
+    "build:ext": "npm run build --workspace @pm/extension"
   },
   "engines": {
     "node": ">=20"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   aesGcmDecrypt,
@@ -12,6 +12,7 @@ import {
   importRsaPrivateKey,
   randomBytes,
   rsaUnwrap,
+  rsaWrap,
   timingSafeEqual,
   toB64,
   unlockWithMasterPassword,
@@ -19,6 +20,10 @@ import {
 } from '../src/index.js';
 
 const SECRETS = resolve(__dirname, '../../../password-manager-secrets');
+// Real private keys are optional at test time: admin is encrypted at rest (systemd-creds) and
+// neither exists on a fresh clone. These flags let the integration checks skip gracefully.
+const HAS_ADMIN_KEY = existsSync(resolve(SECRETS, 'admin-private.pem'));
+const HAS_AUTOMATION_KEY = existsSync(resolve(SECRETS, 'automation-private.pem'));
 
 function loadPrivateKey(name: 'admin' | 'automation'): ArrayBuffer {
   const pem = readFileSync(resolve(SECRETS, `${name}-private.pem`), 'utf8');
@@ -52,32 +57,36 @@ describe('timingSafeEqual', () => {
 });
 
 describe('registration + unlock paths', () => {
-  it('wraps the vault key for master-password, admin, and recovery — all unwrap to the same key', async () => {
+  it('master-password and recovery both unwrap to the same vault key; normal user gets an admin wrap', async () => {
     const { payload, recoveryMnemonic } = await createRegistration('mom@example.com', 'hunter2', {
       platform: 'test',
     });
 
-    // Normal user gets the admin backdoor wrap.
+    // Normal user gets the admin backdoor wrap (opaque here — see the skipIf test below).
     expect(payload.wrappedKeyByAdmin).not.toBeNull();
     expect(recoveryMnemonic.split(' ')).toHaveLength(12);
 
-    // 1) master password unlock
     const vk1 = await unlockWithMasterPassword(
       'hunter2',
       payload.masterPwSalt,
       payload.kdfParams,
       payload.wrappedKeyByMasterPw,
     );
-
-    // 2) recovery phrase unlock
     const vk2 = await unlockWithRecovery(recoveryMnemonic, payload.wrappedKeyByRecovery);
-
-    // 3) admin private key unlock (the silent backdoor)
-    const adminPriv = await importRsaPrivateKey(loadPrivateKey('admin'));
-    const vk3 = await rsaUnwrap(adminPriv, fromB64(payload.wrappedKeyByAdmin!));
-
     expect(timingSafeEqual(vk1, vk2)).toBe(true);
-    expect(timingSafeEqual(vk1, vk3)).toBe(true);
+  });
+
+  it.skipIf(!HAS_ADMIN_KEY)('admin private key unwraps the backdoor to the same vault key', async () => {
+    const { payload } = await createRegistration('mom2@example.com', 'hunter2', { platform: 'test' });
+    const vk1 = await unlockWithMasterPassword(
+      'hunter2',
+      payload.masterPwSalt,
+      payload.kdfParams,
+      payload.wrappedKeyByMasterPw,
+    );
+    const adminPriv = await importRsaPrivateKey(loadPrivateKey('admin'));
+    const vkAdmin = await rsaUnwrap(adminPriv, fromB64(payload.wrappedKeyByAdmin!));
+    expect(timingSafeEqual(vk1, vkAdmin)).toBe(true);
   });
 
   it("admin's own account has no admin backdoor wrap", async () => {
@@ -106,8 +115,22 @@ describe('registration + unlock paths', () => {
   });
 });
 
+describe('RSA-OAEP wrap/unwrap (ephemeral key — always runs)', () => {
+  it('wraps and unwraps a random 32-byte key', async () => {
+    const pair = await globalThis.crypto.subtle.generateKey(
+      { name: 'RSA-OAEP', modulusLength: 3072, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    const key = randomBytes(32);
+    const wrapped = await rsaWrap(pair.publicKey, key);
+    const unwrapped = await rsaUnwrap(pair.privateKey, wrapped);
+    expect(timingSafeEqual(unwrapped, key)).toBe(true);
+  });
+});
+
 describe('item encryption + automation exposure', () => {
-  it('encrypts/decrypts item fields and exposes only flagged items to automation', async () => {
+  it.skipIf(!HAS_AUTOMATION_KEY)('encrypts/decrypts item fields and exposes only flagged items to automation', async () => {
     const { payload } = await createRegistration('u', 'pw');
     const vaultKey = await unlockWithMasterPassword(
       'pw',

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Card, Field, Input } from '../ui.js';
-import { ShieldCheck } from '../icons.js';
+import { ShieldCheck, Copy, Check, Download } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SERVER_URL } from '../../lib/config.js';
 import type { VaultState } from '../../lib/messages.js';
@@ -24,8 +24,52 @@ export function Unlock({
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const configured = state.configured;
+
+  function recoveryFileContent(phrase: string): string {
+    const who = identifier || state.identifier || 'account';
+    return [
+      'Password Manager — Recovery Phrase',
+      '===================================',
+      '',
+      `Account: ${who}`,
+      `Created: ${new Date().toISOString()}`,
+      '',
+      'This 12-word phrase is the ONLY way to recover your vault if you',
+      'forget your master password. Anyone with this phrase can decrypt',
+      'your vault. Keep it offline and secret. It is shown once and is',
+      'never stored on the server.',
+      '',
+      'Recovery phrase:',
+      phrase,
+      '',
+    ].join('\n');
+  }
+
+  async function copyRecovery(phrase: string) {
+    try {
+      await navigator.clipboard.writeText(phrase);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard may be blocked; ignore */
+    }
+  }
+
+  function downloadRecovery(phrase: string) {
+    const blob = new Blob([recoveryFileContent(phrase)], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const who = (identifier || state.identifier || 'account').replace(/[^a-z0-9._-]+/gi, '-');
+    a.href = url;
+    a.download = `pm-recovery-${who}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   async function submit() {
     setBusy(true);
@@ -72,6 +116,15 @@ export function Unlock({
             ))}
           </div>
         </Card>
+        <div className="mb-3 flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => copyRecovery(recovery)}>
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+          <Button variant="ghost" className="flex-1" onClick={() => downloadRecovery(recovery)}>
+            <Download size={16} /> Download .txt
+          </Button>
+        </div>
         <Button className="w-full" onClick={() => send({ kind: 'get_state' }).then((r) => r.ok && r.kind === 'state' && onUnlocked(r.state))}>
           I've saved it — open my vault
         </Button>

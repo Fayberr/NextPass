@@ -130,41 +130,38 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
 
 // --- inline generate badge + generator card (Kaspersky-style) ------------------------------------
 
-let badgeHost: HTMLDivElement | null = null;
-let badgeField: HTMLInputElement | null = null;
-let badgeBtn: HTMLButtonElement | null = null;
+// The key badge is shown PERSISTENTLY in every detected password field (not just the focused one),
+// like Kaspersky/Bitwarden. We keep one floating host per field and reposition them on scroll/resize;
+// a MutationObserver keeps the set in sync as fields appear/disappear (SPA navigation, dynamic forms).
+interface Badge {
+  host: HTMLDivElement;
+  btn: HTMLButtonElement;
+}
+const badges = new Map<HTMLInputElement, Badge>();
 
-function closeBadge(): void {
-  badgeHost?.remove();
-  badgeHost = null;
-  badgeField = null;
-  badgeBtn = null;
+const KEY_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6 6 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>`;
+
+/** True when the field is laid out AND currently within the viewport (so its badge is worth showing). */
+function badgeShouldShow(field: HTMLInputElement): boolean {
+  if (!isVisible(field)) return false;
+  const r = field.getBoundingClientRect();
+  return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
 }
 
-/** Reflect open/closed state on the in-field key badge (violet-filled while the card is open). */
-function setBadgeActive(active: boolean): void {
-  badgeBtn?.classList.toggle('active', active);
-}
-
-function positionBadge(): void {
-  if (!badgeHost || !badgeField) return;
-  if (!isVisible(badgeField)) {
-    closeBadge();
+function positionBadge(field: HTMLInputElement, badge: Badge): void {
+  if (!badgeShouldShow(field)) {
+    badge.host.style.display = 'none';
     return;
   }
-  const r = badgeField.getBoundingClientRect();
-  badgeHost.style.left = `${Math.round(r.right - 30)}px`;
-  badgeHost.style.top = `${Math.round(r.top + r.height / 2 - 12)}px`;
+  const r = field.getBoundingClientRect();
+  badge.host.style.display = '';
+  badge.host.style.left = `${Math.round(r.right - 30)}px`;
+  badge.host.style.top = `${Math.round(r.top + r.height / 2 - 12)}px`;
 }
 
-/** A small key badge floated over the right edge of a password field; opens the generator. */
-function showBadge(pw: HTMLInputElement): void {
-  if (badgeField === pw && badgeHost) {
-    positionBadge();
-    return;
-  }
-  closeBadge();
-  badgeField = pw;
+/** Create the persistent badge for a field if it doesn't have one yet. */
+function ensureBadge(field: HTMLInputElement): void {
+  if (badges.has(field)) return;
   const host = document.createElement('div');
   host.style.cssText =
     'position:fixed;z-index:2147483646;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
@@ -176,27 +173,56 @@ function showBadge(pw: HTMLInputElement): void {
       .key:hover{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
       .key.active{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
     </style>
-    <button class="key" title="Password generator" tabindex="-1" aria-label="Toggle password generator">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round">
-        <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6 6 0 1 0-4-4z"/>
-        <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>
-      </svg>
-    </button>`;
+    <button class="key" title="Password generator" tabindex="-1" aria-label="Toggle password generator">${KEY_SVG}</button>`;
   document.documentElement.appendChild(host);
-  badgeHost = host;
-  badgeBtn = shadow.querySelector<HTMLButtonElement>('.key');
-  positionBadge();
-  badgeBtn!.addEventListener('mousedown', (e) => {
+  const btn = shadow.querySelector<HTMLButtonElement>('.key')!;
+  const badge: Badge = { host, btn };
+  badges.set(field, badge);
+  positionBadge(field, badge);
+  btn.addEventListener('mousedown', (e) => {
     e.preventDefault(); // keep focus on the field
     // Toggle: the badge is the sole open/close control for the generator card.
-    if (genHost && genField === pw) {
-      noAutoOpen.add(pw); // don't let a re-focus immediately reopen what the user just closed
+    if (genHost && genField === field) {
+      noAutoOpen.add(field); // don't let a re-focus immediately reopen what the user just closed
       closeGen();
     } else {
-      openGenerator(pw);
+      openGenerator(field);
     }
   });
+}
+
+function removeBadge(field: HTMLInputElement): void {
+  const badge = badges.get(field);
+  if (!badge) return;
+  badge.host.remove();
+  badges.delete(field);
+}
+
+function closeAllBadges(): void {
+  for (const { host } of badges.values()) host.remove();
+  badges.clear();
+}
+
+/** Reposition every badge (scroll/resize) and reflect which one owns the open generator card. */
+function refreshBadges(): void {
+  for (const [field, badge] of badges) {
+    positionBadge(field, badge);
+    badge.btn.classList.toggle('active', !!genHost && genField === field);
+  }
+}
+
+/** Sweep the DOM: add badges for newly-detected password fields, drop badges for vanished ones. */
+function scanFields(): void {
+  const present = new Set<HTMLInputElement>();
+  for (const el of document.querySelectorAll<HTMLInputElement>(PW_SELECTOR)) {
+    if (!isVisible(el)) continue;
+    present.add(el);
+    ensureBadge(el);
+  }
+  for (const field of [...badges.keys()]) {
+    if (!present.has(field)) removeBadge(field);
+  }
+  refreshBadges();
 }
 
 let genHost: HTMLDivElement | null = null;
@@ -210,7 +236,7 @@ function closeGen(): void {
   genHost?.remove();
   genHost = null;
   genField = null;
-  setBadgeActive(false);
+  refreshBadges(); // clear the active state on whichever badge owned the card
 }
 
 function positionGen(): void {
@@ -334,7 +360,8 @@ function openGenerator(pw: HTMLInputElement): void {
   document.documentElement.appendChild(host);
   genHost = host;
   noAutoOpen.delete(pw);
-  setBadgeActive(true);
+  ensureBadge(pw); // guarantee the owning field has a badge, then light it up
+  refreshBadges();
   positionGen();
 
   let current = '';
@@ -398,8 +425,7 @@ function openGenerator(pw: HTMLInputElement): void {
   shadow.getElementById('use')!.addEventListener('click', () => {
     setValue(pw, current);
     fillConfirm(pw, current);
-    closeGen();
-    closeBadge();
+    closeGen(); // the badge stays — it's persistent for the field
   });
 }
 
@@ -504,15 +530,33 @@ function esc(s: string): string {
 // --- wiring --------------------------------------------------------------------------------------
 
 function attach(): void {
-  // On focus of a password field: show the inline generate badge, then either offer saved logins
-  // (existing site) or auto-open the generator (empty new-password field, e.g. a signup form).
+  // Persistent badges: sweep now, then keep in sync with DOM changes so every detected password
+  // field always carries the key icon (not just the focused one).
+  scanFields();
+  let scanQueued = false;
+  const queueScan = (): void => {
+    if (scanQueued) return;
+    scanQueued = true;
+    requestAnimationFrame(() => {
+      scanQueued = false;
+      scanFields();
+    });
+  };
+  new MutationObserver(queueScan).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['type', 'style', 'class', 'hidden'],
+  });
+
+  // On focus of a password field: offer saved logins (existing site) or auto-open the generator
+  // (empty new-password field, e.g. a signup form). The badge itself is already persistent.
   document.addEventListener(
     'focusin',
     async (e) => {
       const t = e.target as HTMLElement | null;
       if (!(t instanceof HTMLInputElement) || !t.matches(PW_SELECTOR) || !isVisible(t)) return;
-      showBadge(t);
-      if (genHost && genField === t) setBadgeActive(true); // re-sync badge if card already open
+      ensureBadge(t); // in case this field only became detectable at focus time
       const ac = t.getAttribute('autocomplete') ?? '';
       const matches = await query();
       if (document.activeElement !== t) return;
@@ -530,11 +574,7 @@ function attach(): void {
       setTimeout(() => {
         closePicker();
         // The generator card is sticky (closed only via the badge / Escape / Use), so we never tear
-        // it down on blur. The badge stays while the card is open (it's the toggle anchor); once the
-        // card is closed AND focus has left the password field, drop the badge.
-        const onPw =
-          document.activeElement instanceof HTMLInputElement && document.activeElement.matches(PW_SELECTOR);
-        if (!onPw && !genHost) closeBadge();
+        // it down on blur. Badges are persistent and are NOT removed on blur either.
       }, 150),
     true,
   );
@@ -545,13 +585,12 @@ function attach(): void {
         closePicker();
         if (genField) noAutoOpen.add(genField);
         closeGen();
-        closeBadge();
       }
     },
     true,
   );
   const reposition = () => {
-    positionBadge();
+    refreshBadges();
     positionGen();
     closePicker();
   };

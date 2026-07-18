@@ -132,11 +132,18 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
 
 let badgeHost: HTMLDivElement | null = null;
 let badgeField: HTMLInputElement | null = null;
+let badgeBtn: HTMLButtonElement | null = null;
 
 function closeBadge(): void {
   badgeHost?.remove();
   badgeHost = null;
   badgeField = null;
+  badgeBtn = null;
+}
+
+/** Reflect open/closed state on the in-field key badge (violet-filled while the card is open). */
+function setBadgeActive(active: boolean): void {
+  badgeBtn?.classList.toggle('active', active);
 }
 
 function positionBadge(): void {
@@ -167,8 +174,9 @@ function showBadge(pw: HTMLInputElement): void {
       .key{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;
         border-radius:7px;cursor:pointer;background:rgba(109,92,224,.14);color:#8b78ea;transition:.15s}
       .key:hover{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
+      .key.active{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
     </style>
-    <button class="key" title="Generate password" tabindex="-1" aria-label="Generate password">
+    <button class="key" title="Password generator" tabindex="-1" aria-label="Toggle password generator">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round">
         <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6 6 0 1 0-4-4z"/>
@@ -177,21 +185,32 @@ function showBadge(pw: HTMLInputElement): void {
     </button>`;
   document.documentElement.appendChild(host);
   badgeHost = host;
+  badgeBtn = shadow.querySelector<HTMLButtonElement>('.key');
   positionBadge();
-  shadow.querySelector<HTMLButtonElement>('.key')!.addEventListener('mousedown', (e) => {
+  badgeBtn!.addEventListener('mousedown', (e) => {
     e.preventDefault(); // keep focus on the field
-    openGenerator(pw);
+    // Toggle: the badge is the sole open/close control for the generator card.
+    if (genHost && genField === pw) {
+      noAutoOpen.add(pw); // don't let a re-focus immediately reopen what the user just closed
+      closeGen();
+    } else {
+      openGenerator(pw);
+    }
   });
 }
 
 let genHost: HTMLDivElement | null = null;
 let genField: HTMLInputElement | null = null;
 const genOpts = { length: 20, uppercase: true, lowercase: true, digits: true, symbols: true };
+// Fields the user has explicitly closed the generator on — suppresses auto-open on the next focus
+// (so re-clicking into the field doesn't reopen a card they just dismissed).
+const noAutoOpen = new WeakSet<HTMLInputElement>();
 
 function closeGen(): void {
   genHost?.remove();
   genHost = null;
   genField = null;
+  setBadgeActive(false);
 }
 
 function positionGen(): void {
@@ -314,6 +333,8 @@ function openGenerator(pw: HTMLInputElement): void {
     </div>`;
   document.documentElement.appendChild(host);
   genHost = host;
+  noAutoOpen.delete(pw);
+  setBadgeActive(true);
   positionGen();
 
   let current = '';
@@ -338,8 +359,8 @@ function openGenerator(pw: HTMLInputElement): void {
   }
   regen();
 
-  // Prevent mousedown inside the card from blurring the password field (which would close us).
-  shadow.querySelector<HTMLElement>('.card')!.addEventListener('mousedown', (e) => e.preventDefault());
+  // NB: we deliberately do NOT block mousedown here. The card is sticky (only the badge/Escape/Use
+  // close it), so letting the field blur is harmless — and it lets the length slider drag natively.
 
   shadow.getElementById('regen')!.addEventListener('click', regen);
   copyBtn.addEventListener('click', () => {
@@ -491,12 +512,13 @@ function attach(): void {
       const t = e.target as HTMLElement | null;
       if (!(t instanceof HTMLInputElement) || !t.matches(PW_SELECTOR) || !isVisible(t)) return;
       showBadge(t);
+      if (genHost && genField === t) setBadgeActive(true); // re-sync badge if card already open
       const ac = t.getAttribute('autocomplete') ?? '';
       const matches = await query();
       if (document.activeElement !== t) return;
       if (matches.length > 0) {
         openPicker(t, matches);
-      } else if (!t.value && !/current-password/.test(ac)) {
+      } else if (!t.value && !/current-password/.test(ac) && !noAutoOpen.has(t) && !genHost) {
         openGenerator(t); // likely a new-password / registration field
       }
     },
@@ -507,11 +529,12 @@ function attach(): void {
     () =>
       setTimeout(() => {
         closePicker();
-        // Only tear down the badge/generator once focus has actually left the password field.
-        if (!(document.activeElement instanceof HTMLInputElement) || !document.activeElement.matches(PW_SELECTOR)) {
-          closeGen();
-          closeBadge();
-        }
+        // The generator card is sticky (closed only via the badge / Escape / Use), so we never tear
+        // it down on blur. The badge stays while the card is open (it's the toggle anchor); once the
+        // card is closed AND focus has left the password field, drop the badge.
+        const onPw =
+          document.activeElement instanceof HTMLInputElement && document.activeElement.matches(PW_SELECTOR);
+        if (!onPw && !genHost) closeBadge();
       }, 150),
     true,
   );
@@ -520,6 +543,7 @@ function attach(): void {
     (e) => {
       if (e.key === 'Escape') {
         closePicker();
+        if (genField) noAutoOpen.add(genField);
         closeGen();
         closeBadge();
       }

@@ -52,10 +52,10 @@ export default defineManifest({
   },
   permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'alarms', 'webAuthenticationProxy'],
   host_permissions: [
+    'https://password-manager.fayber.dev/*',
+    'http://192.168.178.2:8787/*',
     'http://localhost:8787/*',
     'http://127.0.0.1:8787/*',
-    'http://192.168.178.2:8787/*',
-    'https://vault.fayber.dev/*',
   ],
   icons: {
     '16': 'icons/icon16.png',

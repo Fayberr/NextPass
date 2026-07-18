@@ -7,10 +7,12 @@
 
 import type { KdfParams } from '@pm/shared';
 
-// Default points at the always-on Pi server over the LAN so the extension works turnkey from
-// another machine (e.g. the Windows PC) with no manual entry. Override on the login screen for
-// local dev (http://localhost:8787). The Pi origin is already in the manifest host_permissions.
-export const DEFAULT_SERVER_URL = 'http://192.168.178.2:8787';
+// Default points at the always-on Pi server via its public HTTPS subdomain (Cloudflare tunnel →
+// nginx → 127.0.0.1:8787), so the extension works turnkey from anywhere — on the LAN or off it
+// (phone, other people's machines) — with no manual entry. This is a background-only origin; the
+// user never types it. Override on the login screen for local dev (http://localhost:8787) or to
+// pin the LAN IP (http://192.168.178.2:8787). All origins are in the manifest host_permissions.
+export const DEFAULT_SERVER_URL = 'https://password-manager.fayber.dev';
 
 export interface AccountMeta {
   serverUrl: string;

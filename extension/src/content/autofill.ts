@@ -136,6 +136,7 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
 interface Badge {
   host: HTMLDivElement;
   btn: HTMLButtonElement;
+  inset: number; // px to shift left so we clear the site's own in-field controls (eye/clear/etc.)
 }
 const badges = new Map<HTMLInputElement, Badge>();
 
@@ -148,6 +149,57 @@ function badgeShouldShow(field: HTMLInputElement): boolean {
   return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
 }
 
+/** Is `el` one of our own injected overlay hosts (badge / picker / generator / save-card)? */
+function isOurNode(el: Element): boolean {
+  if (el === genHost || el === pickerHost || el === saveHost) return true;
+  for (const { host } of badges.values()) if (el === host) return true;
+  return false;
+}
+
+/** Looks like an interactive in-field affordance (a site's show/hide, clear, search icon, etc.). */
+function isControlLike(el: Element): boolean {
+  const tag = el.tagName.toUpperCase();
+  if (tag === 'BUTTON' || tag === 'A' || tag === 'IMG' || tag === 'SVG' || tag === 'I') return true;
+  if (el.getAttribute('role') === 'button') return true;
+  try {
+    if (getComputedStyle(el).cursor === 'pointer') return true;
+  } catch {
+    /* cross-origin / detached */
+  }
+  return false;
+}
+
+/**
+ * Measure how much of the field's right edge is already occupied by the site's own controls, so we
+ * can slot our badge just to their left instead of covering them. We probe points along the field's
+ * vertical centre from the right edge inward with `elementsFromPoint` — that reflects the ACTUAL
+ * visual stacking (an overlay eye button sits above the input at that point), independent of DOM
+ * structure — and take the leftmost overlapping control's edge. Returns 0 when the edge is clear.
+ */
+function computeRightInset(field: HTMLInputElement): number {
+  const r = field.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return 0;
+  const cy = r.top + r.height / 2;
+  const zoneLeft = r.right - Math.min(r.width, r.height * 3.2); // only inspect the right portion
+  let leftMost = r.right;
+  for (let x = r.right - 4; x >= zoneLeft; x -= 5) {
+    if (x < 0 || x > window.innerWidth) continue;
+    const stack = document.elementsFromPoint(x, cy);
+    const fieldIdx = stack.indexOf(field);
+    const above = fieldIdx === -1 ? stack.length : fieldIdx; // elements painted on top of the field
+    for (let i = 0; i < above; i++) {
+      const el = stack[i]!;
+      if (isOurNode(el) || field.contains(el) || el.contains(field)) continue;
+      if (!isControlLike(el)) continue;
+      const cr = el.getBoundingClientRect();
+      if (cr.width === 0 || cr.height === 0 || cr.width > r.height * 3) continue; // skip big overlays
+      if (cr.left >= r.left && cr.left < leftMost) leftMost = cr.left;
+    }
+  }
+  const occupied = r.right - leftMost;
+  return occupied > 2 ? Math.round(occupied) + 4 : 0; // small gap so we sit just left of their control
+}
+
 function positionBadge(field: HTMLInputElement, badge: Badge): void {
   if (!badgeShouldShow(field)) {
     badge.host.style.display = 'none';
@@ -155,7 +207,7 @@ function positionBadge(field: HTMLInputElement, badge: Badge): void {
   }
   const r = field.getBoundingClientRect();
   badge.host.style.display = '';
-  badge.host.style.left = `${Math.round(r.right - 30)}px`;
+  badge.host.style.left = `${Math.round(r.right - 30 - badge.inset)}px`;
   badge.host.style.top = `${Math.round(r.top + r.height / 2 - 12)}px`;
 }
 
@@ -176,7 +228,7 @@ function ensureBadge(field: HTMLInputElement): void {
     <button class="key" title="Password generator" tabindex="-1" aria-label="Toggle password generator">${KEY_SVG}</button>`;
   document.documentElement.appendChild(host);
   const btn = shadow.querySelector<HTMLButtonElement>('.key')!;
-  const badge: Badge = { host, btn };
+  const badge: Badge = { host, btn, inset: computeRightInset(field) };
   badges.set(field, badge);
   positionBadge(field, badge);
   btn.addEventListener('mousedown', (e) => {
@@ -203,9 +255,14 @@ function closeAllBadges(): void {
   badges.clear();
 }
 
-/** Reposition every badge (scroll/resize) and reflect which one owns the open generator card. */
-function refreshBadges(): void {
+/**
+ * Reposition every badge and reflect which one owns the open card. `recompute` re-measures each
+ * field's right-inset (its overlapping site controls) — do that on layout changes (scan/resize) but
+ * NOT on plain scroll, where the field and its controls move together so the cached inset holds.
+ */
+function refreshBadges(recompute = false): void {
   for (const [field, badge] of badges) {
+    if (recompute) badge.inset = computeRightInset(field);
     positionBadge(field, badge);
     badge.btn.classList.toggle('active', !!genHost && genField === field);
   }
@@ -222,7 +279,7 @@ function scanFields(): void {
   for (const field of [...badges.keys()]) {
     if (!present.has(field)) removeBadge(field);
   }
-  refreshBadges();
+  refreshBadges(true); // DOM changed → re-measure insets (a site control may have appeared/moved)
 }
 
 let genHost: HTMLDivElement | null = null;
@@ -589,13 +646,24 @@ function attach(): void {
     },
     true,
   );
-  const reposition = () => {
-    refreshBadges();
-    positionGen();
-    closePicker();
-  };
-  window.addEventListener('scroll', reposition, true);
-  window.addEventListener('resize', reposition, true);
+  window.addEventListener(
+    'scroll',
+    () => {
+      refreshBadges(false); // scroll: field + its controls move together, cached inset still valid
+      positionGen();
+      closePicker();
+    },
+    true,
+  );
+  window.addEventListener(
+    'resize',
+    () => {
+      refreshBadges(true); // resize can reflow the field's controls → re-measure the inset
+      positionGen();
+      closePicker();
+    },
+    true,
+  );
   // If the user starts typing their own password, get out of the way (keep the badge to reopen).
   document.addEventListener(
     'input',

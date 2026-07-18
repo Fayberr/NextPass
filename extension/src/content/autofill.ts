@@ -498,15 +498,41 @@ function looksLikeEmail(s: string): boolean {
 // Many modern sign-up/login forms (React/Vue/etc.) have no real <form> element at all — the
 // "Register"/"Sign in" control is a plain <button type="button"> whose onClick fires an XHR/fetch
 // directly, so no native 'submit' event is ever dispatched (confirmed on demoqa.com/register: zero
-// <form> tags in the rendered markup). We fall back to a click-based heuristic for those cases.
-const SUBMIT_HINTS =
-  /log\s?in|sign\s?in|sign\s?up|regist|create\s*(an\s*)?account|continue|submit|confirm|proceed/i;
+// <form> tags in the rendered markup). We fall back to a click-based heuristic for those cases —
+// the same technique Bitwarden's own client uses (see PR bitwarden/clients#10909): normalize the
+// control's accessible label into individual Unicode words and match against a submit-word list,
+// rather than a single locale-specific regex, so non-English sites (a real case for us — German
+// speakers are among the userbase) are recognised too.
+const SUBMIT_KEYWORDS = new Set([
+  // English
+  'login', 'log', 'in', 'sign', 'signin', 'signup', 'register', 'create', 'account', 'continue',
+  'submit', 'confirm', 'proceed', 'join', 'next', 'go',
+  // German
+  'anmelden', 'einloggen', 'registrieren', 'konto', 'erstellen', 'weiter', 'fortfahren',
+  'bestätigen', 'bestaetigen', 'senden', 'absenden', 'fertig', 'anmeldung',
+  // Spanish
+  'iniciar', 'sesión', 'sesion', 'registrarse', 'continuar', 'confirmar', 'enviar', 'crear',
+  'cuenta', 'entrar',
+  // French
+  'connexion', 'connecter', 'inscription', 'inscrire', 'continuer', 'confirmer', 'envoyer',
+  'créer', 'creer', 'compte', 'valider',
+]);
 
 /** Best-effort accessible label for a button-like element (used to spot submit-style controls). */
 function controlLabel(el: Element): string {
   return (
     el.getAttribute('aria-label') ?? (el as HTMLInputElement).value ?? el.textContent ?? ''
   ).trim();
+}
+
+/** Split into lowercase Unicode "letter run" words — locale-agnostic, mirrors Bitwarden's approach. */
+function normalizeWords(s: string): string[] {
+  return s.toLowerCase().match(/[\p{L}]+/gu) ?? [];
+}
+
+/** Does this control's label look like a submit/continue/register-style action, in any supported language? */
+function looksLikeSubmitControl(el: Element): boolean {
+  return normalizeWords(controlLabel(el)).some((w) => SUBMIT_KEYWORDS.has(w));
 }
 
 /** A password field, visible and non-empty, searched first within `scope` then the whole document
@@ -672,6 +698,23 @@ function attach(): void {
         if (genField) noAutoOpen.add(genField);
         closeGen();
       }
+      if (e.key === 'Enter') {
+        // Fallback for forms/widgets submitted purely by pressing Enter in a field, with no
+        // submit-labelled button click at all (the native 'submit' listener already covers real
+        // <form> Enter-submits; this catches the form-less/JS-driven case, same idea as the
+        // click-based fallback above but for the keyboard path).
+        const t = e.target as HTMLElement | null;
+        if (t instanceof HTMLInputElement && t.type !== 'checkbox' && t.type !== 'radio') {
+          const scope = t.closest('form') ?? document;
+          const pw = findFilledPassword(scope);
+          if (pw) {
+            const password = pw.value;
+            const userField = findUsernameField(pw);
+            const identifier = userField?.value?.trim() ?? '';
+            setTimeout(() => void maybePromptSave(identifier, password), 400);
+          }
+        }
+      }
     },
     true,
   );
@@ -729,7 +772,7 @@ function attach(): void {
       if (!el) return;
       const isSubmitType =
         (el as HTMLInputElement | HTMLButtonElement).type === 'submit';
-      if (!isSubmitType && !SUBMIT_HINTS.test(controlLabel(el))) return;
+      if (!isSubmitType && !looksLikeSubmitControl(el)) return;
       const scope = el.closest('form') ?? document;
       const pw = findFilledPassword(scope);
       if (!pw) return;

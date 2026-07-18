@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Field } from '../ui.js';
+import { Button, Checkbox, Field, Slider } from '../ui.js';
 import { ArrowLeft, Copy, Check, RefreshCw } from '../icons.js';
 import { send } from '../client.js';
 import { generatePassword, generatePassphrase } from '@pm/shared';
@@ -102,14 +102,7 @@ export function Generator({ onBack }: { onBack: () => void }) {
         {g.mode === 'password' ? (
           <>
             <Field label={`Length: ${g.length}`}>
-              <input
-                type="range"
-                min={8}
-                max={64}
-                value={g.length}
-                onChange={(e) => patch({ length: Number(e.target.value) })}
-                className="w-full accent-violet-soft"
-              />
+              <Slider min={8} max={64} value={g.length} onChange={(v) => patch({ length: v })} />
             </Field>
             <Toggle label="Uppercase (A-Z)" checked={g.uppercase} onChange={(v) => patch({ uppercase: v })} />
             <Toggle label="Digits (0-9)" checked={g.digits} onChange={(v) => patch({ digits: v })} />
@@ -123,14 +116,7 @@ export function Generator({ onBack }: { onBack: () => void }) {
         ) : (
           <>
             <Field label={`Words: ${g.words}`}>
-              <input
-                type="range"
-                min={3}
-                max={8}
-                value={g.words}
-                onChange={(e) => patch({ words: Number(e.target.value) })}
-                className="w-full accent-violet-soft"
-              />
+              <Slider min={3} max={8} value={g.words} onChange={(v) => patch({ words: v })} />
             </Field>
             <Toggle label="Capitalize words" checked={g.uppercase} onChange={(v) => patch({ uppercase: v })} />
             <Toggle label="Append a number" checked={g.digits} onChange={(v) => patch({ digits: v })} />
@@ -162,7 +148,7 @@ function Toggle({
   return (
     <label className="mb-2 flex cursor-pointer items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-sm text-white/80">
       {label}
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-violet-soft" />
+      <Checkbox checked={checked} onChange={onChange} />
     </label>
   );
 }

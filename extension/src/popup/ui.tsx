@@ -51,6 +51,102 @@ export function Label({ children }: { children: React.ReactNode }) {
   return <label className="mb-1 block text-xs font-medium text-white/50">{children}</label>;
 }
 
+/** Themed checkbox (native checkboxes render in the OS light theme; `.pm-check` restyles them). */
+export function Checkbox({
+  checked,
+  onChange,
+  className,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  className?: string;
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className={cx('pm-check', className)}
+    />
+  );
+}
+
+/** Themed range slider (`.pm-range` styles track + thumb across engines). */
+export function Slider({
+  value,
+  min,
+  max,
+  onChange,
+  className,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  className?: string;
+}) {
+  return (
+    <input
+      type="range"
+      min={min}
+      max={max}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className={cx('pm-range', className)}
+    />
+  );
+}
+
+/** Themed textarea matching the Input primitive. */
+export const Textarea = forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(function Textarea({ className, ...props }, ref) {
+  return (
+    <textarea
+      ref={ref}
+      className={cx(
+        'w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90',
+        'placeholder:text-white/30 outline-none focus:border-violet-soft/60 focus:bg-white/[0.07]',
+        className,
+      )}
+      {...props}
+    />
+  );
+});
+
+/**
+ * Collapsible section with a clickable header row + chevron. Used for the generator's advanced
+ * options (Kaspersky-style: collapsed by default, expands to length + character-set toggles).
+ */
+export function Collapsible({
+  label,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium text-white/75 hover:text-white"
+      >
+        {label}
+        <ChevronDown
+          size={16}
+          className={cx('text-white/40 transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {open && <div className="border-t border-white/5 p-3">{children}</div>}
+    </div>
+  );
+}
+
 export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cx('glass rounded-card p-4', className)}>{children}</div>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Field, Input, Select } from '../ui.js';
+import { Button, Checkbox, Field, Input, Select, Slider, Textarea } from '../ui.js';
 import { ArrowLeft, Copy, Check, Eye, EyeOff, Wand } from '../icons.js';
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
@@ -141,35 +141,18 @@ export function AddLogin({
 
           {genOpen && (
             <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="mb-2 flex items-center gap-2">
+              <div className="mb-3 flex items-center gap-2.5">
                 <span className="text-[11px] text-white/50">Length</span>
-                <input
-                  type="range"
-                  min={8}
-                  max={64}
-                  value={glen}
-                  onChange={(e) => setGlen(Number(e.target.value))}
-                  className="flex-1 accent-violet-soft"
-                />
+                <Slider min={8} max={64} value={glen} onChange={setGlen} className="flex-1" />
                 <span className="w-6 text-right text-xs tabular-nums text-white/80">{glen}</span>
               </div>
-              <div className="flex items-center gap-4 text-[11px] text-white/60">
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={gDig}
-                    onChange={(e) => setGDig(e.target.checked)}
-                    className="accent-violet-soft"
-                  />
+              <div className="flex items-center gap-4 text-[11px] text-white/70">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <Checkbox checked={gDig} onChange={setGDig} className="!h-4 !w-4" />
                   0-9
                 </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={gSym}
-                    onChange={(e) => setGSym(e.target.checked)}
-                    className="accent-violet-soft"
-                  />
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <Checkbox checked={gSym} onChange={setGSym} className="!h-4 !w-4" />
                   Symbols
                 </label>
                 <Button variant="ghost" className="ml-auto px-3 py-1 text-xs" onClick={regen}>
@@ -215,12 +198,11 @@ export function AddLogin({
         </Field>
 
         <Field label="Notes">
-          <textarea
+          <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Optional notes…"
-            className="w-full resize-none rounded-xl border border-white/10 bg-ink-700 px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/30"
           />
         </Field>
 

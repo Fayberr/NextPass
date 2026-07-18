@@ -186,7 +186,7 @@ function showBadge(pw: HTMLInputElement): void {
 
 let genHost: HTMLDivElement | null = null;
 let genField: HTMLInputElement | null = null;
-const genOpts = { length: 20, digits: true, symbols: true };
+const genOpts = { length: 20, uppercase: true, lowercase: true, digits: true, symbols: true };
 
 function closeGen(): void {
   genHost?.remove();
@@ -248,12 +248,35 @@ function openGenerator(pw: HTMLInputElement): void {
       .ib.copied{background:#1f8a5b;color:#fff}
       .str{margin:9px 2px 12px;font-size:11.5px;color:rgba(233,231,239,.55)}
       .str b{font-weight:600}
-      .ctl{display:flex;align-items:center;gap:8px;margin:0 2px 8px;font-size:11.5px;color:rgba(233,231,239,.7)}
-      .ctl input[type=range]{flex:1;accent-color:#8b78ea}
+      /* Collapsible options (Kaspersky-style, collapsed by default). */
+      .opt{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;
+        background:rgba(255,255,255,.04);color:rgba(233,231,239,.8);border-radius:10px;padding:9px 11px;
+        font-size:12px;font-weight:500;cursor:pointer;margin-bottom:11px}
+      .opt:hover{background:rgba(255,255,255,.07)}
+      .opt .chev{transition:transform .18s;color:rgba(233,231,239,.5)}
+      .opt.open .chev{transform:rotate(180deg)}
+      .opts{display:none;margin:-3px 2px 12px}
+      .opts.open{display:block}
+      .lenrow{display:flex;align-items:center;gap:9px;margin:2px 0 12px;font-size:11.5px;color:rgba(233,231,239,.7)}
       .len{width:22px;text-align:right;font-variant-numeric:tabular-nums;color:#e9e7ef}
-      .toggles{display:flex;gap:14px;margin:0 2px 13px;font-size:11.5px;color:rgba(233,231,239,.7)}
-      .toggles label{display:flex;align-items:center;gap:5px;cursor:pointer}
-      .toggles input{accent-color:#8b78ea}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+      .grid label{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:rgba(233,231,239,.82)}
+      /* Custom checkbox — appearance:none so it ignores the OS light theme. */
+      .cb{-webkit-appearance:none;appearance:none;width:17px;height:17px;flex:none;display:inline-grid;
+        place-content:center;border-radius:5px;border:1.5px solid rgba(255,255,255,.25);
+        background:rgba(255,255,255,.05);cursor:pointer;transition:background .15s,border-color .15s}
+      .cb:hover{border-color:rgba(139,120,234,.7)}
+      .cb:checked{background:linear-gradient(135deg,#8b78ea,#6d5ce0);border-color:transparent}
+      .cb::after{content:"";width:11px;height:11px;opacity:0;transition:opacity .12s;
+        background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/contain no-repeat}
+      .cb:checked::after{opacity:1}
+      /* Custom range slider. */
+      .rng{-webkit-appearance:none;appearance:none;flex:1;height:6px;border-radius:999px;
+        background:rgba(255,255,255,.14);cursor:pointer}
+      .rng::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+        background:#fff;border:3px solid #6d5ce0;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+      .rng::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:#fff;
+        border:3px solid #6d5ce0;box-shadow:0 1px 4px rgba(0,0,0,.5)}
       .use{width:100%;border:0;border-radius:10px;padding:10px;font-size:13px;font-weight:600;
         cursor:pointer;background:#6d5ce0;color:#fff}
       .use:hover{filter:brightness(1.08)}
@@ -274,10 +297,18 @@ function openGenerator(pw: HTMLInputElement): void {
         </button>
       </div>
       <div class="str">Strength: <b id="str"></b></div>
-      <div class="ctl"><span>Length</span><input type="range" min="8" max="40" id="len" value="${genOpts.length}"><span class="len" id="lenv">${genOpts.length}</span></div>
-      <div class="toggles">
-        <label><input type="checkbox" id="dig" ${genOpts.digits ? 'checked' : ''}>0-9</label>
-        <label><input type="checkbox" id="sym" ${genOpts.symbols ? 'checked' : ''}>Symbols</label>
+      <button class="opt" id="optbtn" type="button" aria-expanded="false">
+        <span>Options</span>
+        <svg class="chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="opts" id="opts">
+        <div class="lenrow"><span>Length</span><input class="rng" type="range" min="8" max="40" id="len" value="${genOpts.length}"><span class="len" id="lenv">${genOpts.length}</span></div>
+        <div class="grid">
+          <label><input class="cb" type="checkbox" id="upper" ${genOpts.uppercase ? 'checked' : ''}>A-Z</label>
+          <label><input class="cb" type="checkbox" id="lower" ${genOpts.lowercase ? 'checked' : ''}>a-z</label>
+          <label><input class="cb" type="checkbox" id="dig" ${genOpts.digits ? 'checked' : ''}>0-9</label>
+          <label><input class="cb" type="checkbox" id="sym" ${genOpts.symbols ? 'checked' : ''}>Symbols</label>
+        </div>
       </div>
       <button class="use" id="use">Use password</button>
     </div>`;
@@ -291,7 +322,13 @@ function openGenerator(pw: HTMLInputElement): void {
   const copyBtn = shadow.getElementById('copy') as HTMLButtonElement;
 
   function regen(): void {
-    current = generatePassword({ length: genOpts.length, digits: genOpts.digits, symbols: genOpts.symbols });
+    current = generatePassword({
+      length: genOpts.length,
+      uppercase: genOpts.uppercase,
+      lowercase: genOpts.lowercase,
+      digits: genOpts.digits,
+      symbols: genOpts.symbols,
+    });
     pwEl.textContent = current;
     const s = passwordStrength(current); // 0–4
     const label = ['Very weak', 'Weak', 'Fair', 'Strong', 'Very strong'][s] ?? 'Strong';
@@ -310,6 +347,16 @@ function openGenerator(pw: HTMLInputElement): void {
     copyBtn.classList.add('copied');
     setTimeout(() => copyBtn.classList.remove('copied'), 1100);
   });
+
+  // Collapsible "Options" section (collapsed by default).
+  const optBtn = shadow.getElementById('optbtn')!;
+  const opts = shadow.getElementById('opts')!;
+  optBtn.addEventListener('click', () => {
+    const open = opts.classList.toggle('open');
+    optBtn.classList.toggle('open', open);
+    optBtn.setAttribute('aria-expanded', String(open));
+  });
+
   const lenEl = shadow.getElementById('len') as HTMLInputElement;
   const lenv = shadow.getElementById('lenv')!;
   lenEl.addEventListener('input', () => {
@@ -317,14 +364,16 @@ function openGenerator(pw: HTMLInputElement): void {
     lenv.textContent = lenEl.value;
     regen();
   });
-  (shadow.getElementById('dig') as HTMLInputElement).addEventListener('change', (e) => {
-    genOpts.digits = (e.target as HTMLInputElement).checked;
-    regen();
-  });
-  (shadow.getElementById('sym') as HTMLInputElement).addEventListener('change', (e) => {
-    genOpts.symbols = (e.target as HTMLInputElement).checked;
-    regen();
-  });
+  const bindToggle = (id: string, key: 'uppercase' | 'lowercase' | 'digits' | 'symbols'): void => {
+    (shadow.getElementById(id) as HTMLInputElement).addEventListener('change', (e) => {
+      genOpts[key] = (e.target as HTMLInputElement).checked;
+      regen();
+    });
+  };
+  bindToggle('upper', 'uppercase');
+  bindToggle('lower', 'lowercase');
+  bindToggle('dig', 'digits');
+  bindToggle('sym', 'symbols');
   shadow.getElementById('use')!.addEventListener('click', () => {
     setValue(pw, current);
     fillConfirm(pw, current);

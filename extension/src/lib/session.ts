@@ -500,12 +500,20 @@ export class SessionManager {
       },
     );
 
-    // Persist the incremented signature counter (clone-detection hygiene).
-    const updated: PasskeyFields = { ...chosen.fields, signCount: assertion.newSignCount };
-    const upsert = await encryptItem(key, 'passkey', updated);
-    const rec = await this.api(acct).updateItem(chosen.record.id, upsert);
-    await cacheUpsert([rec]);
-    this.decrypted.delete(rec.id);
+    // Persist the incremented signature counter (clone-detection hygiene). This is BEST-EFFORT:
+    // the assertion above is already valid and complete, so a failure to reach the server here
+    // (or any persistence hiccup) must NOT abort the sign-in — otherwise a transient network blip
+    // turns a good passkey login into "Authentication failed / Failed to fetch". We try to save,
+    // and on failure just log and return the assertion; the counter re-syncs on the next success.
+    try {
+      const updated: PasskeyFields = { ...chosen.fields, signCount: assertion.newSignCount };
+      const upsert = await encryptItem(key, 'passkey', updated);
+      const rec = await this.api(acct).updateItem(chosen.record.id, upsert);
+      await cacheUpsert([rec]);
+      this.decrypted.delete(rec.id);
+    } catch (e) {
+      console.warn('[pm] passkey sign-counter persist failed (assertion still returned):', e);
+    }
 
     return {
       credentialId: b64url(assertion.credentialId),

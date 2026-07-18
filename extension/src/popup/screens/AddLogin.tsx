@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Field, Input } from '../ui.js';
+import { Button, Field, Input, Select } from '../ui.js';
 import { ArrowLeft, Copy, Check, Eye, EyeOff, Wand } from '../icons.js';
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
@@ -155,11 +155,21 @@ export function AddLogin({
               </div>
               <div className="flex items-center gap-4 text-[11px] text-white/60">
                 <label className="flex items-center gap-1.5">
-                  <input type="checkbox" checked={gDig} onChange={(e) => setGDig(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={gDig}
+                    onChange={(e) => setGDig(e.target.checked)}
+                    className="accent-violet-soft"
+                  />
                   0-9
                 </label>
                 <label className="flex items-center gap-1.5">
-                  <input type="checkbox" checked={gSym} onChange={(e) => setGSym(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={gSym}
+                    onChange={(e) => setGSym(e.target.checked)}
+                    className="accent-violet-soft"
+                  />
                   Symbols
                 </label>
                 <Button variant="ghost" className="ml-auto px-3 py-1 text-xs" onClick={regen}>
@@ -174,16 +184,19 @@ export function AddLogin({
           <Input value={uri} onChange={(e) => setUri(e.target.value)} placeholder="https://…" />
         </Field>
         <Field label="Match mode">
-          <select
+          <Select<MatchMode>
             value={matchMode}
-            onChange={(e) => setMatchMode(e.target.value as MatchMode)}
-            className="w-full rounded-xl border border-white/10 bg-ink-700 px-3 py-2 text-sm text-white/90 outline-none"
-          >
-            <option value="host">Host (this subdomain)</option>
-            <option value="base_domain">Base domain (all subdomains)</option>
-            <option value="exact">Exact URL</option>
-            <option value="never">Never autofill</option>
-          </select>
+            onChange={setMatchMode}
+            options={[
+              { value: 'base_domain', label: 'Base domain', hint: 'Any subdomain of the site (recommended)' },
+              { value: 'host', label: 'Host', hint: 'Only this exact subdomain' },
+              { value: 'exact', label: 'Exact URL', hint: 'Only this full URL' },
+              { value: 'never', label: 'Never', hint: "Don't autofill; suggest manually only" },
+            ]}
+          />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-white/35">
+            Controls when this login is offered to autofill on a page.
+          </p>
         </Field>
 
         <Field label="One-time code (TOTP)">

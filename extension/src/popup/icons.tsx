@@ -164,6 +164,14 @@ export function KeyRound(props: IconProps) {
   );
 }
 
+export function ChevronDown(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Svg>
+  );
+}
+
 export function ArrowLeft(props: IconProps) {
   return (
     <Svg {...props}>

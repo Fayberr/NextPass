@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Button, Field } from '../ui.js';
+import { Button, Field, Select } from '../ui.js';
 import { ArrowLeft } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
 
 const LOCK_OPTIONS = [
-  { v: 0, label: 'Never' },
-  { v: 1, label: '1 min' },
-  { v: 5, label: '5 min' },
-  { v: 15, label: '15 min' },
-  { v: 30, label: '30 min' },
-  { v: 60, label: '1 hour' },
+  { value: 0, label: 'Never' },
+  { value: 1, label: '1 minute' },
+  { value: 5, label: '5 minutes' },
+  { value: 15, label: '15 minutes' },
+  { value: 30, label: '30 minutes' },
+  { value: 60, label: '1 hour' },
 ];
 const CLIP_OPTIONS = [
-  { v: 0, label: 'Never' },
-  { v: 10, label: '10 s' },
-  { v: 30, label: '30 s' },
-  { v: 60, label: '1 min' },
-  { v: 120, label: '2 min' },
+  { value: 0, label: 'Never' },
+  { value: 10, label: '10 seconds' },
+  { value: 30, label: '30 seconds' },
+  { value: 60, label: '1 minute' },
+  { value: 120, label: '2 minutes' },
 ];
 
 export function Settings({ onBack }: { onBack: () => void }) {
@@ -72,29 +72,5 @@ export function Settings({ onBack }: { onBack: () => void }) {
         </p>
       </div>
     </div>
-  );
-}
-
-function Select({
-  value,
-  options,
-  onChange,
-}: {
-  value: number;
-  options: { v: number; label: string }[];
-  onChange: (v: number) => void;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full rounded-xl border border-white/10 bg-ink-700 px-3 py-2 text-sm text-white/90 outline-none"
-    >
-      {options.map((o) => (
-        <option key={o.v} value={o.v}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   );
 }

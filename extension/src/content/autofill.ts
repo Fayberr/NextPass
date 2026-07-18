@@ -495,6 +495,35 @@ function looksLikeEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+// Many modern sign-up/login forms (React/Vue/etc.) have no real <form> element at all — the
+// "Register"/"Sign in" control is a plain <button type="button"> whose onClick fires an XHR/fetch
+// directly, so no native 'submit' event is ever dispatched (confirmed on demoqa.com/register: zero
+// <form> tags in the rendered markup). We fall back to a click-based heuristic for those cases.
+const SUBMIT_HINTS =
+  /log\s?in|sign\s?in|sign\s?up|regist|create\s*(an\s*)?account|continue|submit|confirm|proceed/i;
+
+/** Best-effort accessible label for a button-like element (used to spot submit-style controls). */
+function controlLabel(el: Element): string {
+  return (
+    el.getAttribute('aria-label') ?? (el as HTMLInputElement).value ?? el.textContent ?? ''
+  ).trim();
+}
+
+/** A password field, visible and non-empty, searched first within `scope` then the whole document
+ *  (covers both classic forms and form-less SPA widgets where there's no shared container at all). */
+function findFilledPassword(scope: ParentNode): HTMLInputElement | null {
+  const inScope = Array.from(scope.querySelectorAll<HTMLInputElement>(PW_SELECTOR)).find(
+    (p) => isVisible(p) && p.value,
+  );
+  if (inScope) return inScope;
+  if (scope === document) return null;
+  return (
+    Array.from(document.querySelectorAll<HTMLInputElement>(PW_SELECTOR)).find(
+      (p) => isVisible(p) && p.value,
+    ) ?? null
+  );
+}
+
 async function maybePromptSave(identifier: string, password: string): Promise<void> {
   const sig = `${identifier} ${password}`;
   if (!password || sig === lastSaved) return;
@@ -673,7 +702,7 @@ function attach(): void {
     true,
   );
 
-  // Save/update prompt on form submit.
+  // Save/update prompt on form submit (classic <form> sites).
   document.addEventListener(
     'submit',
     (e) => {
@@ -683,6 +712,33 @@ function attach(): void {
       if (!pw?.value) return;
       const userField = findUsernameField(pw);
       void maybePromptSave(userField?.value?.trim() ?? '', pw.value);
+    },
+    true,
+  );
+
+  // Fallback for form-less SPA sign-up/login widgets: a click on a submit-labelled button/control
+  // near a filled password field, even though no native 'submit' event will ever fire. Harmless to
+  // run alongside the listener above — maybePromptSave's signature guard skips duplicate prompts if
+  // both happen to fire for the same credentials.
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const el = target.closest<HTMLElement>('button, [role="button"], input[type="submit"]');
+      if (!el) return;
+      const isSubmitType =
+        (el as HTMLInputElement | HTMLButtonElement).type === 'submit';
+      if (!isSubmitType && !SUBMIT_HINTS.test(controlLabel(el))) return;
+      const scope = el.closest('form') ?? document;
+      const pw = findFilledPassword(scope);
+      if (!pw) return;
+      const password = pw.value;
+      const userField = findUsernameField(pw);
+      const identifier = userField?.value?.trim() ?? '';
+      // Small delay: let the site's own click handling (validation/XHR) settle before our card
+      // appears, so it doesn't visually collide with the page's own submit feedback.
+      setTimeout(() => void maybePromptSave(identifier, password), 400);
     },
     true,
   );

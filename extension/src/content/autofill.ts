@@ -16,6 +16,22 @@ function isVisible(el: HTMLElement): boolean {
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 }
 
+/**
+ * Whether a password field looks like a genuine new-password/signup field (safe to auto-open the
+ * generator for), rather than an ordinary login field. Many real sites (e.g. demoqa.com) never set
+ * `autocomplete` at all, so "not marked current-password" is NOT good enough evidence on its own
+ * (that previously caused the generator to pop open on plain login pages) — require POSITIVE proof:
+ * either an explicit `autocomplete="new-password"`, or a second visible password field in the same
+ * scope (a confirm/repeat-password sibling, which login forms never have).
+ */
+function isLikelyNewPasswordField(pw: HTMLInputElement): boolean {
+  const ac = pw.getAttribute('autocomplete') ?? '';
+  if (/new-password/.test(ac)) return true;
+  const scope = pw.closest('form') ?? document;
+  const pwFields = Array.from(scope.querySelectorAll<HTMLInputElement>(PW_SELECTOR)).filter(isVisible);
+  return pwFields.length > 1;
+}
+
 /** Find the username field associated with a given password field (positional heuristic). */
 function findUsernameField(pw: HTMLInputElement): HTMLInputElement | null {
   const inputs = Array.from(
@@ -676,12 +692,11 @@ function attach(): void {
       const t = e.target as HTMLElement | null;
       if (!(t instanceof HTMLInputElement) || !t.matches(PW_SELECTOR) || !isVisible(t)) return;
       ensureBadge(t); // in case this field only became detectable at focus time
-      const ac = t.getAttribute('autocomplete') ?? '';
       const matches = await query();
       if (document.activeElement !== t) return;
       if (matches.length > 0) {
         openPicker(t, matches);
-      } else if (!t.value && !/current-password/.test(ac) && !noAutoOpen.has(t) && !genHost) {
+      } else if (!t.value && isLikelyNewPasswordField(t) && !noAutoOpen.has(t) && !genHost) {
         openGenerator(t); // likely a new-password / registration field
       }
     },

@@ -82,10 +82,16 @@ async function query(): Promise<AutofillMatch[]> {
 // --- inline picker -------------------------------------------------------------------------------
 
 let pickerHost: HTMLDivElement | null = null;
+let pickerField: HTMLInputElement | null = null;
+// Last-known saved-login matches per password field (populated on focus) — lets the badge decide,
+// at click time, whether to open the accounts picker (saved logins exist) or the generator
+// (no saved logins — likely a new/registration field), without re-querying synchronously.
+const fieldMatches = new WeakMap<HTMLInputElement, AutofillMatch[]>();
 
 function closePicker(): void {
   pickerHost?.remove();
   pickerHost = null;
+  pickerField = null;
 }
 
 function fillWith(pw: HTMLInputElement, m: AutofillMatch): void {
@@ -136,6 +142,7 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
     <div class="box"><div class="hd">Password Manager</div>${rows}</div>`;
   document.documentElement.appendChild(host);
   pickerHost = host;
+  pickerField = pw;
   shadow.querySelectorAll<HTMLButtonElement>('.row').forEach((btn) => {
     btn.addEventListener('mousedown', (e) => {
       e.preventDefault(); // keep focus on the field
@@ -249,7 +256,16 @@ function ensureBadge(field: HTMLInputElement): void {
   positionBadge(field, badge);
   btn.addEventListener('mousedown', (e) => {
     e.preventDefault(); // keep focus on the field
-    // Toggle: the badge is the sole open/close control for the generator card.
+    // If this field has saved logins, the badge is a toggle for the accounts picker (not the
+    // generator) — clicking it should never offer to overwrite a saved password with a new
+    // random one. Only fields with no saved match (new/registration fields) use it to toggle
+    // the generator.
+    const matches = fieldMatches.get(field) ?? [];
+    if (matches.length > 0) {
+      if (pickerHost && pickerField === field) closePicker();
+      else openPicker(field, matches);
+      return;
+    }
     if (genHost && genField === field) {
       noAutoOpen.add(field); // don't let a re-focus immediately reopen what the user just closed
       closeGen();
@@ -280,7 +296,10 @@ function refreshBadges(recompute = false): void {
   for (const [field, badge] of badges) {
     if (recompute) badge.inset = computeRightInset(field);
     positionBadge(field, badge);
-    badge.btn.classList.toggle('active', !!genHost && genField === field);
+    badge.btn.classList.toggle(
+      'active',
+      (!!genHost && genField === field) || (!!pickerHost && pickerField === field),
+    );
   }
 }
 
@@ -694,6 +713,8 @@ function attach(): void {
       ensureBadge(t); // in case this field only became detectable at focus time
       const matches = await query();
       if (document.activeElement !== t) return;
+      fieldMatches.set(t, matches); // let the badge know whether this field has saved logins
+      refreshBadges();
       if (matches.length > 0) {
         openPicker(t, matches);
       } else if (!t.value && isLikelyNewPasswordField(t) && !noAutoOpen.has(t) && !genHost) {

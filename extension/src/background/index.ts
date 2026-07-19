@@ -149,6 +149,10 @@ async function handle(msg: Msg): Promise<MsgResult> {
       case 'passkey_get':
         return { ok: true, kind: 'passkey_asserted', res: await session.passkeyGet(msg.req) };
 
+      case 'open_unlock_ui':
+        await waProxy.openUnlockUi();
+        return { ok: true, kind: 'void' };
+
       default:
         return { ok: false, error: `Unknown message: ${(msg as { kind: string }).kind}` };
     }

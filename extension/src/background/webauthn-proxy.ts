@@ -89,7 +89,8 @@ export class WebAuthnProxy {
    * no separate OS window). If the browser can't open the action popup programmatically (older
    * builds, or no focused window), fall back to a standalone popup window.
    */
-  private async openUnlockUi(): Promise<void> {
+  /** Public: also used by the content-script "vault locked" prompt (autofill.ts) to surface unlock. */
+  async openUnlockUi(): Promise<void> {
     if (chrome.action?.openPopup) {
       try {
         await chrome.action.openPopup();

@@ -54,7 +54,8 @@ export type Msg =
   | { kind: 'sync' }
   | { kind: 'autofill_query'; url: string }
   | { kind: 'passkey_create'; req: PasskeyCreateReq }
-  | { kind: 'passkey_get'; req: PasskeyGetReq };
+  | { kind: 'passkey_get'; req: PasskeyGetReq }
+  | { kind: 'open_unlock_ui' };
 
 export type MsgResult =
   | { ok: true; kind: 'state'; state: VaultState; recovery?: string }

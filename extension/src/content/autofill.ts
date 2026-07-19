@@ -518,11 +518,18 @@ const SUBMIT_KEYWORDS = new Set([
   'créer', 'creer', 'compte', 'valider',
 ]);
 
-/** Best-effort accessible label for a button-like element (used to spot submit-style controls). */
+/**
+ * Best-effort accessible label for a button-like element (used to spot submit-style controls).
+ * NB: `.value` on a plain <button> is always "" (not null/undefined) even with no `value`
+ * attribute set, so a naive `el.value ?? el.textContent` never falls through to textContent for
+ * ordinary <button>Text</button> markup — the single most common case. Only treat `.value` as the
+ * label source for actual <input> controls (e.g. input[type=submit] value="Register").
+ */
 function controlLabel(el: Element): string {
-  return (
-    el.getAttribute('aria-label') ?? (el as HTMLInputElement).value ?? el.textContent ?? ''
-  ).trim();
+  const aria = el.getAttribute('aria-label');
+  if (aria) return aria.trim();
+  if (el instanceof HTMLInputElement) return el.value.trim();
+  return (el.textContent ?? '').trim();
 }
 
 /** Split into lowercase Unicode "letter run" words — locale-agnostic, mirrors Bitwarden's approach. */
@@ -551,7 +558,7 @@ function findFilledPassword(scope: ParentNode): HTMLInputElement | null {
 }
 
 async function maybePromptSave(identifier: string, password: string): Promise<void> {
-  const sig = `${identifier} ${password}`;
+  const sig = `${identifier} ${password}`;
   if (!password || sig === lastSaved) return;
   const matches = await query();
   const existing = matches.find((m) => (m.username ?? m.email) === identifier);

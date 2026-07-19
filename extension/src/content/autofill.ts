@@ -119,34 +119,55 @@ function closeLockPrompt(): void {
   lockField = null;
 }
 
+/** Same anchor algorithm as the generator card (positionGen): right of the field if there's room,
+ *  else below it, right-aligned — so the lock prompt appears exactly where the generator would. */
+function anchorCardNextTo(field: HTMLInputElement, width: number): { left: number; top: number } {
+  const r = field.getBoundingClientRect();
+  const spaceRight = window.innerWidth - r.right;
+  if (spaceRight >= width + 12) return { left: r.right + 8, top: r.top };
+  return {
+    left: Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8)),
+    top: r.bottom + 6,
+  };
+}
+
 function openLockPrompt(pw: HTMLInputElement): void {
   closePicker();
   closeGen();
   closeLockPrompt();
-  const r = pw.getBoundingClientRect();
+  const W = 300; // same card width as the generator
+  const { left, top } = anchorCardNextTo(pw, W);
   const host = document.createElement('div');
-  host.style.cssText = `position:fixed;left:${Math.round(r.left)}px;top:${Math.round(
-    r.bottom + 4,
-  )}px;width:${Math.max(240, Math.round(r.width))}px;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
+  host.style.cssText = `position:fixed;left:${Math.round(left)}px;top:${Math.round(
+    top,
+  )}px;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
   const shadow = host.attachShadow({ mode: 'closed' });
   shadow.innerHTML = `
     <style>
-      @keyframes pm-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-      .box{background:#1a1622;border:1px solid rgba(109,92,224,.4);border-radius:12px;padding:10px;
-        box-shadow:0 12px 30px rgba(0,0,0,.5),0 0 16px rgba(109,92,224,.2);animation:pm-in .14s ease-out}
-      .msg{font-size:12px;color:#e9e7ef;padding:2px 4px 8px}
-      .btn{display:block;width:100%;border:0;border-radius:9px;padding:9px;cursor:pointer;
-        background:#6d5ce0;color:#fff;font-size:13px;font-weight:600}
-      .btn:hover{background:#7a68f0}
+      @keyframes pm-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+      .card{width:${W}px;background:#1a1622;color:#e9e7ef;border:1px solid rgba(109,92,224,.35);
+        border-radius:14px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.55),0 0 22px rgba(109,92,224,.22);
+        animation:pm-in .16s ease-out}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:13px;font-weight:600}
+      .hd svg{color:#8b78ea}
+      .msg{font-size:12px;color:rgba(233,231,239,.7);margin:0 2px 14px}
+      .use{width:100%;border:0;border-radius:10px;padding:10px;font-size:13px;font-weight:600;
+        cursor:pointer;background:#6d5ce0;color:#fff}
+      .use:hover{filter:brightness(1.08)}
     </style>
-    <div class="box">
-      <div class="msg">Password Manager is locked</div>
-      <button class="btn">Unlock to autofill / generate</button>
+    <div class="card" role="dialog" aria-label="Password Manager locked">
+      <div class="hd">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Password Manager
+      </div>
+      <div class="msg">Vault is locked. Unlock it to see saved logins or generate a password here.</div>
+      <button class="use" id="unlock">Unlock</button>
     </div>`;
   document.documentElement.appendChild(host);
   lockHost = host;
   lockField = pw;
-  shadow.querySelector<HTMLButtonElement>('.btn')!.addEventListener('mousedown', (e) => {
+  shadow.querySelector<HTMLButtonElement>('#unlock')!.addEventListener('mousedown', (e) => {
     e.preventDefault();
     void sendMsg({ kind: 'open_unlock_ui' });
     closeLockPrompt();
@@ -327,8 +348,12 @@ function ensureBadge(field: HTMLInputElement): void {
       // If this field has saved logins, the badge is a toggle for the accounts picker (not the
       // generator) — clicking it should never offer to overwrite a saved password with a new
       // random one. Only fields with no saved match (new/registration fields) use it to toggle
-      // the generator.
-      const matches = fieldMatches.get(field) ?? [];
+      // the generator. Re-query fresh rather than trusting the cache: the cache may be stale from
+      // an earlier focus while the vault was still locked (e.g. user just unlocked via the popup
+      // without refocusing the field), and a stale empty result would wrongly fall through to the
+      // generator here.
+      const matches = await query();
+      fieldMatches.set(field, matches);
       if (matches.length > 0) {
         if (pickerHost && pickerField === field) closePicker();
         else openPicker(field, matches);

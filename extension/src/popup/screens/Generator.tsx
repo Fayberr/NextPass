@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Button, Checkbox, Field, Slider } from '../ui.js';
-import { ArrowLeft, Copy, Check, RefreshCw } from '../icons.js';
+import { Copy, Check, RefreshCw } from '../icons.js';
 import { send } from '../client.js';
 import { generatePassword, generatePassphrase } from '@pm/shared';
 import { DEFAULT_SETTINGS, type GeneratorDefaults } from '../../lib/settings.js';
 
 /** Standalone password / passphrase generator. Seeds its options from the saved generator
- *  defaults (Settings) and can persist changes back so the inline generators stay in sync. */
-export function Generator({ onBack }: { onBack: () => void }) {
+ *  defaults (Settings) and can persist changes back so the inline generators stay in sync.
+ *  Reached via the rail (not a drill-down), so the header is a plain title — no back button. */
+export function Generator({ onBack: _onBack }: { onBack: () => void }) {
   const [g, setG] = useState<GeneratorDefaults>(DEFAULT_SETTINGS.gen);
   const [value, setValue] = useState('');
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   function patch(p: Partial<GeneratorDefaults>) {
     setG((prev) => ({ ...prev, ...p }));
@@ -48,17 +50,15 @@ export function Generator({ onBack }: { onBack: () => void }) {
 
   async function saveDefaults() {
     await send({ kind: 'set_settings', patch: { gen: g } });
-    onBack();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
   }
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-white/5 p-3">
-        <Button variant="subtle" onClick={onBack}>
-          <ArrowLeft size={16} /> Back
-        </Button>
-        <span className="text-sm font-semibold">Generator</span>
-      </header>
+      <div className="px-4 pt-3 pb-1">
+        <span className="text-sm font-semibold text-white/90">Generator</span>
+      </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mb-4 flex items-stretch gap-1.5">
@@ -126,7 +126,7 @@ export function Generator({ onBack }: { onBack: () => void }) {
 
       <footer className="flex gap-2 border-t border-white/5 p-3">
         <Button variant="ghost" className="flex-1" onClick={saveDefaults}>
-          Save as default
+          {saved ? 'Saved' : 'Save as default'}
         </Button>
         <Button className="flex-1" onClick={copy}>
           {copied ? 'Copied' : 'Copy'}

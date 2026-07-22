@@ -4,7 +4,7 @@ import { ArrowLeft, Check, Copy, Eye, EyeOff, Pencil, Trash, Star } from '../ico
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
 import { TotpCode } from '../TotpCode.js';
-import type { LoginFields } from '@pm/shared';
+import type { LoginFields, PasskeyFields } from '@pm/shared';
 
 function CopyRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
   const [revealed, setRevealed] = useState(false);
@@ -158,6 +158,22 @@ export function ItemDetail({
                     <CopyRow label="Account" value={(fields as { account: string }).account} />
                   )}
                 </>
+              ) : type === 'passkey' ? (
+                (() => {
+                  const pk = fields as unknown as PasskeyFields;
+                  return (
+                    <>
+                      <CopyRow label="Site" value={pk.rpName ? `${pk.rpName} (${pk.rpId})` : pk.rpId} />
+                      {(pk.userDisplayName || pk.userName) && (
+                        <CopyRow label="Account" value={pk.userDisplayName || pk.userName || ''} />
+                      )}
+                      <CopyRow
+                        label="Created"
+                        value={new Date(pk.createdAt).toLocaleDateString()}
+                      />
+                    </>
+                  );
+                })()
               ) : (
                 <>
                   {fields.username && <CopyRow label="Username" value={fields.username} />}
@@ -168,7 +184,7 @@ export function ItemDetail({
               )}
             </Card>
 
-            {fields.uris?.length > 0 && (
+            {type !== 'passkey' && fields.uris?.length > 0 && (
               <Card className="mt-3">
                 <div className="mb-1 text-[11px] text-white/40">Websites</div>
                 {fields.uris.map((u, i) => (

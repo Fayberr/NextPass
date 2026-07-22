@@ -124,7 +124,7 @@ export function VaultList({
             return (
               <div
                 key={item.id}
-                className="mb-1.5 flex w-full items-center gap-3 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/[0.02] px-3 py-2.5 transition hover:border-[rgba(255,255,255,0.14)] hover:bg-white/5"
+                className="mb-1.5 flex w-full items-center gap-3 rounded-xl border border-transparent bg-white/[0.035] px-3 py-2.5 transition-colors duration-150 hover:bg-white/[0.065]"
               >
                 <button
                   onClick={() => onSelect(item.id)}

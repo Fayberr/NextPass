@@ -14,6 +14,7 @@ import { AddNote } from './screens/AddNote.js';
 import { Generator } from './screens/Generator.js';
 import { Health } from './screens/Health.js';
 import { Settings } from './screens/Settings.js';
+import { Import } from './screens/Import.js';
 import { AppShell } from './AppShell.js';
 import type { Category } from './Sidebar.js';
 import type { VaultState } from '../lib/messages.js';
@@ -43,7 +44,8 @@ type View =
   | { name: 'edit_note'; id: string; initial: NoteFields }
   | { name: 'generator' }
   | { name: 'health' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'import' };
 
 /** Category -> the "add new item" view for that category (Passkeys/Favorites have none). */
 const ADD_VIEW: Partial<Record<Category, View>> = {
@@ -239,6 +241,17 @@ export function App() {
     case 'settings':
       content = <Settings onBack={() => setView({ name: 'list' })} />;
       break;
+    case 'import':
+      content = (
+        <Import
+          onDone={() => {
+            setView({ name: 'list' });
+            setReloadTick((t) => t + 1);
+          }}
+          onCancel={() => setView({ name: 'list' })}
+        />
+      );
+      break;
     case 'edit':
       content = (
         <AddLogin
@@ -272,6 +285,7 @@ export function App() {
       syncing={syncing}
       onHealth={() => setView({ name: 'health' })}
       onSettings={() => setView({ name: 'settings' })}
+      onImport={() => setView({ name: 'import' })}
     >
       {content}
     </AppShell>

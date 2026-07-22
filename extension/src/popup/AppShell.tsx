@@ -14,6 +14,7 @@ export function AppShell({
   syncing,
   onHealth,
   onSettings,
+  onImport,
   children,
 }: {
   active: Category | 'generator';
@@ -25,6 +26,7 @@ export function AppShell({
   syncing: boolean;
   onHealth: () => void;
   onSettings: () => void;
+  onImport: () => void;
   children: ReactNode;
 }) {
   return (
@@ -38,6 +40,7 @@ export function AppShell({
           syncing={syncing}
           onHealth={onHealth}
           onSettings={onSettings}
+          onImport={onImport}
         />
         <div className="min-h-0 flex-1">{children}</div>
       </div>

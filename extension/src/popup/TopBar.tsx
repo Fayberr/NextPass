@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input } from './ui.js';
-import { Lock, MoreVertical, RefreshCw, ShieldCheck, Settings as SettingsIcon } from './icons.js';
+import { Lock, MoreVertical, RefreshCw, ShieldCheck, Settings as SettingsIcon, Upload } from './icons.js';
 
 export function TopBar({
   search,
@@ -16,6 +16,7 @@ export function TopBar({
   syncing,
   onHealth,
   onSettings,
+  onImport,
 }: {
   search?: { value: string; onChange: (v: string) => void };
   onLock: () => void;
@@ -23,6 +24,7 @@ export function TopBar({
   syncing: boolean;
   onHealth: () => void;
   onSettings: () => void;
+  onImport: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -85,6 +87,17 @@ export function TopBar({
               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-white/80 hover:bg-white/10"
             >
               <SettingsIcon size={15} /> Settings
+            </button>
+            <div className="my-1 border-t border-[rgba(255,255,255,0.07)]" />
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onImport();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-white/80 hover:bg-white/10"
+            >
+              <Upload size={15} /> Import
             </button>
           </div>
         )}

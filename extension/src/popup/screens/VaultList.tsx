@@ -144,9 +144,11 @@ export function VaultList({
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-white/90">{item.name}</div>
+                    <div className="truncate text-sm font-semibold tracking-tight text-white/90">
+                      {item.name}
+                    </div>
                     {item.username && (
-                      <div className="truncate text-xs text-white/40">{item.username}</div>
+                      <div className="mt-1 truncate text-xs text-white/40">{item.username}</div>
                     )}
                   </div>
                 </button>

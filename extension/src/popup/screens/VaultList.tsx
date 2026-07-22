@@ -332,7 +332,7 @@ export function VaultList({
 
                 {quickFields.length > 0 && (
                   <div
-                    className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
                       isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                     }`}
                   >

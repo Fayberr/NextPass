@@ -4,7 +4,15 @@
  * memory and only ever returns decrypted field data on explicit request.
  */
 
-import type { AuditReport, LoginFields, TotpFields } from '@pm/shared';
+import type {
+  AuditReport,
+  LoginFields,
+  TotpFields,
+  SecretFields,
+  CardFields,
+  AutofillIdentityFields,
+  NoteFields,
+} from '@pm/shared';
 import type { Settings } from './settings.js';
 
 export interface VaultState {
@@ -46,6 +54,14 @@ export type Msg =
   | { kind: 'update_login'; id: string; fields: LoginFields }
   | { kind: 'create_totp'; fields: TotpFields }
   | { kind: 'update_totp'; id: string; fields: TotpFields }
+  | { kind: 'create_secret'; fields: SecretFields }
+  | { kind: 'update_secret'; id: string; fields: SecretFields }
+  | { kind: 'create_identity'; fields: AutofillIdentityFields }
+  | { kind: 'update_identity'; id: string; fields: AutofillIdentityFields }
+  | { kind: 'create_card'; fields: CardFields }
+  | { kind: 'update_card'; id: string; fields: CardFields }
+  | { kind: 'create_note'; fields: NoteFields }
+  | { kind: 'update_note'; id: string; fields: NoteFields }
   | { kind: 'delete_item'; id: string }
   | { kind: 'set_favorite'; id: string; favorite: boolean }
   | { kind: 'audit' }

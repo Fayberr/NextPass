@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../ui.js';
-import { Plus, Star, KeyRound, ExternalLink } from '../icons.js';
+import { Plus, Star, KeyRound, ExternalLink, Contact, CreditCard, FileText } from '../icons.js';
 import { send } from '../client.js';
 import { TotpCode } from '../TotpCode.js';
 import type { ItemSummary } from '../../lib/messages.js';
 import type { Category } from '../Sidebar.js';
+
+/** Distinct row icon for the item types that don't have a favicon/live-code to show instead. */
+const ROW_ICON: Partial<Record<Category, (props: { size?: number; className?: string }) => React.ReactElement>> = {
+  secret: KeyRound,
+  autofill_identity: Contact,
+  card: CreditCard,
+  note: FileText,
+};
 
 function faviconFor(uris: string[]): string | null {
   const u = uris.find(Boolean);
@@ -25,7 +33,23 @@ const CATEGORY_LABEL: Record<Category, string> = {
   login: 'Websites',
   totp: 'Authenticator',
   passkey: 'Passkeys',
+  secret: 'API Keys & Secrets',
+  autofill_identity: 'Identities',
+  card: 'Bank Cards',
+  note: 'Notes',
   favorites: 'Favorites',
+};
+
+// Passkeys/Favorites never reach this (showAdd is false for them), so no entry needed there.
+const ADD_LABEL: Record<Category, string> = {
+  login: 'Add login',
+  totp: 'Add code',
+  passkey: 'Add',
+  secret: 'Add secret',
+  autofill_identity: 'Add identity',
+  card: 'Add card',
+  note: 'Add note',
+  favorites: 'Add',
 };
 
 export function VaultList({
@@ -34,14 +58,13 @@ export function VaultList({
   reloadKey,
   onSelect,
   onAdd,
-  onAddTotp,
 }: {
   category: Category;
   q: string;
   reloadKey: number;
   onSelect: (id: string) => void;
+  /** Add a new item in the currently active category (parent knows which form to open). */
   onAdd: () => void;
-  onAddTotp: () => void;
 }) {
   const [items, setItems] = useState<ItemSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,9 +97,8 @@ export function VaultList({
   );
 
   // Passkeys have no manual creation flow (only minted via a WebAuthn ceremony) and Favorites
-  // isn't a creation context, so the "Add" footer only shows for the two categories that do
-  // have a form.
-  const showAdd = category === 'login' || category === 'totp';
+  // isn't a creation context, so the "Add" footer is hidden for those two only.
+  const showAdd = category !== 'passkey' && category !== 'favorites';
 
   return (
     <div className="flex h-full flex-col">
@@ -98,6 +120,7 @@ export function VaultList({
           filtered.map((item) => {
             const fav = faviconFor(item.uris);
             const site = item.uris.find(Boolean);
+            const RowIcon = ROW_ICON[item.type as Category];
             return (
               <div
                 key={item.id}
@@ -112,6 +135,8 @@ export function VaultList({
                       <KeyRound size={16} className="text-violet-soft" />
                     ) : fav ? (
                       <img src={fav} alt="" className="h-4 w-4" />
+                    ) : RowIcon ? (
+                      <RowIcon size={16} className="text-white/40" />
                     ) : (
                       <span className="text-xs text-white/40">
                         {item.name.charAt(0).toUpperCase()}
@@ -164,15 +189,9 @@ export function VaultList({
 
       {showAdd && (
         <footer className="flex gap-2 border-t border-white/10 p-3">
-          {category === 'login' ? (
-            <Button className="flex-1" onClick={onAdd}>
-              <Plus size={16} /> Add login
-            </Button>
-          ) : (
-            <Button className="flex-1" onClick={onAddTotp}>
-              <Plus size={16} /> Add code
-            </Button>
-          )}
+          <Button className="flex-1" onClick={onAdd}>
+            <Plus size={16} /> {ADD_LABEL[category]}
+          </Button>
         </footer>
       )}
     </div>

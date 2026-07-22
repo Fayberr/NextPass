@@ -117,6 +117,38 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.updateTotp(msg.id, msg.fields);
         return { ok: true, kind: 'void' };
 
+      case 'create_secret':
+        await session.createSecret(msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'update_secret':
+        await session.updateSecret(msg.id, msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'create_identity':
+        await session.createIdentity(msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'update_identity':
+        await session.updateIdentity(msg.id, msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'create_card':
+        await session.createCard(msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'update_card':
+        await session.updateCard(msg.id, msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'create_note':
+        await session.createNote(msg.fields);
+        return { ok: true, kind: 'void' };
+
+      case 'update_note':
+        await session.updateNote(msg.id, msg.fields);
+        return { ok: true, kind: 'void' };
+
       case 'delete_item':
         await session.deleteItem(msg.id);
         return { ok: true, kind: 'void' };

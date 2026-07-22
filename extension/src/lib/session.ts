@@ -24,6 +24,10 @@ import {
   type LoginFields,
   type PasskeyFields,
   type TotpFields,
+  type SecretFields,
+  type CardFields,
+  type AutofillIdentityFields,
+  type NoteFields,
 } from '@pm/shared';
 import {
   clearAccount,
@@ -263,6 +267,9 @@ export class SessionManager {
     for (const r of records) {
       if (r.deletedAt) continue;
       const { fields } = await this.decryptRecord(r);
+      // Card numbers/secrets never leak into the list subtitle — only a masked last-4 hint for
+      // cards. Notes intentionally show no subtitle (the body may be sensitive).
+      const cardNumber = (fields.number as string) ?? '';
       out.push({
         id: r.id,
         type: r.type,
@@ -272,6 +279,8 @@ export class SessionManager {
           (fields.email as string) ??
           (fields.account as string) ??
           (fields.issuer as string) ??
+          (r.type === 'card' && cardNumber ? `•••• ${cardNumber.slice(-4)}` : null) ??
+          (fields.city as string) ??
           null,
         uris: (fields.uris as string[]) ?? [],
         favorite: r.favorite,
@@ -342,6 +351,122 @@ export class SessionManager {
     if (!acct) throw new Error('Not configured.');
     const prev = (await cacheGetAll()).find((r) => r.id === id);
     const upsert = await encryptItem(key, 'totp', fields, {
+      favorite: prev?.favorite,
+      tags: prev?.tags,
+      folderId: prev?.folderId,
+    });
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Create a designated API key / secret item. */
+  async createSecret(fields: SecretFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, 'secret', fields);
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Overwrite a secret item's fields, preserving favorite/tags/folder metadata. */
+  async updateSecret(id: string, fields: SecretFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const prev = (await cacheGetAll()).find((r) => r.id === id);
+    const upsert = await encryptItem(key, 'secret', fields, {
+      favorite: prev?.favorite,
+      tags: prev?.tags,
+      folderId: prev?.folderId,
+    });
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Create an identity (name/address/contact) item. */
+  async createIdentity(fields: AutofillIdentityFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, 'autofill_identity', fields);
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Overwrite an identity item's fields, preserving favorite/tags/folder metadata. */
+  async updateIdentity(id: string, fields: AutofillIdentityFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const prev = (await cacheGetAll()).find((r) => r.id === id);
+    const upsert = await encryptItem(key, 'autofill_identity', fields, {
+      favorite: prev?.favorite,
+      tags: prev?.tags,
+      folderId: prev?.folderId,
+    });
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Create a bank card item. */
+  async createCard(fields: CardFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, 'card', fields);
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Overwrite a bank card item's fields, preserving favorite/tags/folder metadata. */
+  async updateCard(id: string, fields: CardFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const prev = (await cacheGetAll()).find((r) => r.id === id);
+    const upsert = await encryptItem(key, 'card', fields, {
+      favorite: prev?.favorite,
+      tags: prev?.tags,
+      folderId: prev?.folderId,
+    });
+    const rec = await this.api(acct).updateItem(id, upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Create a general note item. */
+  async createNote(fields: NoteFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, 'note', fields);
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  /** Overwrite a general note item's fields, preserving favorite/tags/folder metadata. */
+  async updateNote(id: string, fields: NoteFields): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const prev = (await cacheGetAll()).find((r) => r.id === id);
+    const upsert = await encryptItem(key, 'note', fields, {
       favorite: prev?.favorite,
       tags: prev?.tags,
       folderId: prev?.folderId,

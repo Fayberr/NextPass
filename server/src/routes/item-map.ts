@@ -37,7 +37,7 @@ export function rowToItem(row: ItemRow): ItemRecord {
 
 export const itemUpsertSchema = z.object({
   id: z.string().uuid().optional(),
-  type: z.enum(['login', 'card', 'secret', 'autofill_identity', 'passkey', 'totp']),
+  type: z.enum(['login', 'card', 'secret', 'autofill_identity', 'passkey', 'totp', 'note']),
   encryptedBlob: z.string().min(1),
   itemKeyWrappedByVaultKey: z.string().min(1),
   itemKeyWrappedByAutomationPubkey: z.string().nullish(),

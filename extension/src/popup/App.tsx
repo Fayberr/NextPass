@@ -7,13 +7,24 @@ import { VaultList } from './screens/VaultList.js';
 import { ItemDetail } from './screens/ItemDetail.js';
 import { AddLogin } from './screens/AddLogin.js';
 import { AddTotp } from './screens/AddTotp.js';
+import { AddSecret } from './screens/AddSecret.js';
+import { AddIdentity } from './screens/AddIdentity.js';
+import { AddCard } from './screens/AddCard.js';
+import { AddNote } from './screens/AddNote.js';
 import { Generator } from './screens/Generator.js';
 import { Health } from './screens/Health.js';
 import { Settings } from './screens/Settings.js';
 import { AppShell } from './AppShell.js';
 import type { Category } from './Sidebar.js';
 import type { VaultState } from '../lib/messages.js';
-import type { LoginFields, TotpFields } from '@pm/shared';
+import type {
+  LoginFields,
+  TotpFields,
+  SecretFields,
+  AutofillIdentityFields,
+  CardFields,
+  NoteFields,
+} from '@pm/shared';
 
 type View =
   | { name: 'list' }
@@ -22,9 +33,27 @@ type View =
   | { name: 'edit'; id: string; initial: LoginFields }
   | { name: 'add_totp' }
   | { name: 'edit_totp'; id: string; initial: TotpFields }
+  | { name: 'add_secret' }
+  | { name: 'edit_secret'; id: string; initial: SecretFields }
+  | { name: 'add_identity' }
+  | { name: 'edit_identity'; id: string; initial: AutofillIdentityFields }
+  | { name: 'add_card' }
+  | { name: 'edit_card'; id: string; initial: CardFields }
+  | { name: 'add_note' }
+  | { name: 'edit_note'; id: string; initial: NoteFields }
   | { name: 'generator' }
   | { name: 'health' }
   | { name: 'settings' };
+
+/** Category -> the "add new item" view for that category (Passkeys/Favorites have none). */
+const ADD_VIEW: Partial<Record<Category, View>> = {
+  login: { name: 'add' },
+  totp: { name: 'add_totp' },
+  secret: { name: 'add_secret' },
+  autofill_identity: { name: 'add_identity' },
+  card: { name: 'add_card' },
+  note: { name: 'add_note' },
+};
 
 export function App() {
   const [state, setState] = useState<VaultState | null>(null);
@@ -87,11 +116,31 @@ export function App() {
         <ItemDetail
           id={view.id}
           onBack={() => setView({ name: 'list' })}
-          onEdit={(id, type, fields) =>
-            type === 'totp'
-              ? setView({ name: 'edit_totp', id, initial: fields as unknown as TotpFields })
-              : setView({ name: 'edit', id, initial: fields })
-          }
+          onEdit={(id, type, fields) => {
+            switch (type) {
+              case 'totp':
+                setView({ name: 'edit_totp', id, initial: fields as unknown as TotpFields });
+                break;
+              case 'secret':
+                setView({ name: 'edit_secret', id, initial: fields as unknown as SecretFields });
+                break;
+              case 'autofill_identity':
+                setView({
+                  name: 'edit_identity',
+                  id,
+                  initial: fields as unknown as AutofillIdentityFields,
+                });
+                break;
+              case 'card':
+                setView({ name: 'edit_card', id, initial: fields as unknown as CardFields });
+                break;
+              case 'note':
+                setView({ name: 'edit_note', id, initial: fields as unknown as NoteFields });
+                break;
+              default:
+                setView({ name: 'edit', id, initial: fields });
+            }
+          }}
           onDeleted={() => setView({ name: 'list' })}
         />
       );
@@ -109,6 +158,66 @@ export function App() {
     case 'edit_totp':
       content = (
         <AddTotp
+          editId={view.id}
+          initial={view.initial}
+          onDone={() => setView({ name: 'detail', id: view.id })}
+          onCancel={() => setView({ name: 'detail', id: view.id })}
+        />
+      );
+      break;
+    case 'add_secret':
+      content = (
+        <AddSecret onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+      );
+      break;
+    case 'edit_secret':
+      content = (
+        <AddSecret
+          editId={view.id}
+          initial={view.initial}
+          onDone={() => setView({ name: 'detail', id: view.id })}
+          onCancel={() => setView({ name: 'detail', id: view.id })}
+        />
+      );
+      break;
+    case 'add_identity':
+      content = (
+        <AddIdentity onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+      );
+      break;
+    case 'edit_identity':
+      content = (
+        <AddIdentity
+          editId={view.id}
+          initial={view.initial}
+          onDone={() => setView({ name: 'detail', id: view.id })}
+          onCancel={() => setView({ name: 'detail', id: view.id })}
+        />
+      );
+      break;
+    case 'add_card':
+      content = (
+        <AddCard onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+      );
+      break;
+    case 'edit_card':
+      content = (
+        <AddCard
+          editId={view.id}
+          initial={view.initial}
+          onDone={() => setView({ name: 'detail', id: view.id })}
+          onCancel={() => setView({ name: 'detail', id: view.id })}
+        />
+      );
+      break;
+    case 'add_note':
+      content = (
+        <AddNote onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+      );
+      break;
+    case 'edit_note':
+      content = (
+        <AddNote
           editId={view.id}
           initial={view.initial}
           onDone={() => setView({ name: 'detail', id: view.id })}
@@ -147,8 +256,7 @@ export function App() {
           q={q}
           reloadKey={reloadTick}
           onSelect={(id) => setView({ name: 'detail', id })}
-          onAdd={() => setView({ name: 'add' })}
-          onAddTotp={() => setView({ name: 'add_totp' })}
+          onAdd={() => setView(ADD_VIEW[category] ?? { name: 'add' })}
         />
       );
   }

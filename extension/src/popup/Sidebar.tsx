@@ -5,14 +5,36 @@
  * Generator is a standalone tool, not a filtered list, so it gets its own button below a divider.
  */
 
-import { Globe, Smartphone, UserRound, Star, Wand } from './icons.js';
+import {
+  Globe,
+  Smartphone,
+  UserRound,
+  Star,
+  Wand,
+  KeyRound,
+  Contact,
+  CreditCard,
+  FileText,
+} from './icons.js';
 
-export type Category = 'login' | 'totp' | 'passkey' | 'favorites';
+export type Category =
+  | 'login'
+  | 'totp'
+  | 'passkey'
+  | 'secret'
+  | 'autofill_identity'
+  | 'card'
+  | 'note'
+  | 'favorites';
 
 const CATEGORIES: { key: Category; icon: (props: { size?: number }) => React.ReactElement; title: string }[] = [
   { key: 'login', icon: Globe, title: 'Websites' },
   { key: 'totp', icon: Smartphone, title: 'Authenticator' },
   { key: 'passkey', icon: UserRound, title: 'Passkeys' },
+  { key: 'secret', icon: KeyRound, title: 'API Keys & Secrets' },
+  { key: 'autofill_identity', icon: Contact, title: 'Identities' },
+  { key: 'card', icon: CreditCard, title: 'Bank Cards' },
+  { key: 'note', icon: FileText, title: 'Notes' },
   { key: 'favorites', icon: Star, title: 'Favorites' },
 ];
 

@@ -65,6 +65,12 @@ export interface TotpFields {
   notes?: string;
 }
 
+/** A freeform secure note — plain text body, no autofill/matching semantics. */
+export interface NoteFields {
+  name: string;
+  body: string;
+}
+
 /** A WebAuthn/FIDO2 passkey stored in the vault (Phase 2). Private key is PKCS#8, base64. */
 export interface PasskeyFields {
   name: string; // display, e.g. "github.com — user@example.com"
@@ -86,7 +92,8 @@ export type ItemFields =
   | CardFields
   | AutofillIdentityFields
   | TotpFields
-  | PasskeyFields;
+  | PasskeyFields
+  | NoteFields;
 
 /** Every item type carries a display `name`. */
 export function itemDisplayName(fields: { name?: string }): string {

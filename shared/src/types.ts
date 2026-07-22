@@ -5,7 +5,7 @@
 
 import type { KdfParams } from './crypto.js';
 
-export type ItemType = 'login' | 'card' | 'secret' | 'autofill_identity' | 'passkey' | 'totp';
+export type ItemType = 'login' | 'card' | 'secret' | 'autofill_identity' | 'passkey' | 'totp' | 'note';
 
 /** Base64-encoded wrapped-key / ciphertext blob as stored and transported. */
 export type B64 = string;

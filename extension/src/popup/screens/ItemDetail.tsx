@@ -4,7 +4,24 @@ import { ArrowLeft, Check, Copy, Eye, EyeOff, Pencil, Trash, Star } from '../ico
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
 import { TotpCode } from '../TotpCode.js';
-import type { LoginFields, PasskeyFields } from '@pm/shared';
+import type {
+  LoginFields,
+  PasskeyFields,
+  SecretFields,
+  CardFields,
+  AutofillIdentityFields,
+  NoteFields,
+} from '@pm/shared';
+
+const TYPE_LABEL: Record<string, string> = {
+  login: 'login',
+  totp: 'authenticator',
+  passkey: 'passkey',
+  secret: 'secret',
+  autofill_identity: 'identity',
+  card: 'card',
+  note: 'note',
+};
 
 function CopyRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
   const [revealed, setRevealed] = useState(false);
@@ -86,7 +103,8 @@ export function ItemDetail({
     else setError(res.error);
   }
 
-  const editable = type === 'login' || type === 'totp';
+  // Only passkeys are non-editable (minted via a WebAuthn ceremony, not a form).
+  const editable = type !== 'passkey';
 
   return (
     <div className="flex h-full flex-col">
@@ -117,7 +135,7 @@ export function ItemDetail({
             <Trash size={16} />
           </Button>
           <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase text-white/50">
-            {type}
+            {TYPE_LABEL[type] ?? type}
           </span>
         </div>
       </header>
@@ -174,6 +192,47 @@ export function ItemDetail({
                     </>
                   );
                 })()
+              ) : type === 'secret' ? (
+                <CopyRow label="Value" value={(fields as unknown as SecretFields).value} secret />
+              ) : type === 'card' ? (
+                (() => {
+                  const cf = fields as unknown as CardFields;
+                  return (
+                    <>
+                      {cf.cardholder && <CopyRow label="Cardholder" value={cf.cardholder} />}
+                      {cf.number && <CopyRow label="Card number" value={cf.number} secret />}
+                      {(cf.expMonth || cf.expYear) && (
+                        <CopyRow label="Expires" value={`${cf.expMonth ?? '--'}/${cf.expYear ?? '----'}`} />
+                      )}
+                      {cf.cvv && <CopyRow label="CVV" value={cf.cvv} secret />}
+                    </>
+                  );
+                })()
+              ) : type === 'autofill_identity' ? (
+                (() => {
+                  const idf = fields as unknown as AutofillIdentityFields;
+                  const fullName = [idf.firstName, idf.lastName].filter(Boolean).join(' ');
+                  const address = [
+                    idf.address1,
+                    idf.address2,
+                    [idf.city, idf.state, idf.postalCode].filter(Boolean).join(' '),
+                    idf.country,
+                  ]
+                    .filter(Boolean)
+                    .join(', ');
+                  return (
+                    <>
+                      {fullName && <CopyRow label="Name" value={fullName} />}
+                      {idf.email && <CopyRow label="Email" value={idf.email} />}
+                      {idf.phone && <CopyRow label="Phone" value={idf.phone} />}
+                      {address && <CopyRow label="Address" value={address} />}
+                    </>
+                  );
+                })()
+              ) : type === 'note' ? (
+                <p className="whitespace-pre-wrap text-sm text-white/80">
+                  {(fields as unknown as NoteFields).body}
+                </p>
               ) : (
                 <>
                   {fields.username && <CopyRow label="Username" value={fields.username} />}
@@ -184,7 +243,7 @@ export function ItemDetail({
               )}
             </Card>
 
-            {type !== 'passkey' && fields.uris?.length > 0 && (
+            {type === 'login' && fields.uris?.length > 0 && (
               <Card className="mt-3">
                 <div className="mb-1 text-[11px] text-white/40">Websites</div>
                 {fields.uris.map((u, i) => (

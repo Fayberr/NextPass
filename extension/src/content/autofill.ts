@@ -98,6 +98,12 @@ let pickerField: HTMLInputElement | null = null;
 // at click time, whether to open the accounts picker (saved logins exist) or the generator
 // (no saved logins — likely a new/registration field), without re-querying synchronously.
 const fieldMatches = new WeakMap<HTMLInputElement, AutofillMatch[]>();
+// Password fields we've already attempted a silent auto-fill for (Kaspersky-style: fill the best
+// match in automatically, no picker interaction required — the icon is only needed to switch
+// accounts). Attempted-but-locked fields are deliberately left unmarked so a later scan/focus can
+// retry once the vault is unlocked; everything else (already has a value, matched, or confirmed
+// empty with no matches) is marked so we never re-query/re-fill on every DOM mutation.
+const autoFillAttempted = new WeakSet<HTMLInputElement>();
 
 function closePicker(): void {
   pickerHost?.remove();
@@ -131,12 +137,12 @@ function anchorCardNextTo(field: HTMLInputElement, width: number): { left: numbe
   };
 }
 
-function openLockPrompt(pw: HTMLInputElement): void {
+function openLockPrompt(pw: HTMLInputElement, anchor: HTMLInputElement = pw): void {
   closePicker();
   closeGen();
   closeLockPrompt();
   const W = 300; // same card width as the generator
-  const { left, top } = anchorCardNextTo(pw, W);
+  const { left, top } = anchorCardNextTo(anchor, W);
   const host = document.createElement('div');
   host.style.cssText = `position:fixed;left:${Math.round(left)}px;top:${Math.round(
     top,
@@ -182,13 +188,45 @@ function fillWith(pw: HTMLInputElement, m: AutofillMatch): void {
   closePicker();
 }
 
-function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
+/**
+ * Silently fill the best (first) saved match into a field pair, without opening the picker —
+ * Kaspersky/Bitwarden-style "just click login". Only ever touches fields that are still empty (an
+ * already-typed value, ours or the site's, is never clobbered), and never fires on a likely
+ * new-password/signup field (that's the generator's job, not the saved-login autofill's). Runs at
+ * most once per password field per page life; `knownMatches` lets a caller that already queried
+ * (e.g. focusin) skip a redundant round-trip.
+ */
+async function attemptAutoFill(pw: HTMLInputElement, knownMatches?: AutofillMatch[]): Promise<void> {
+  if (autoFillAttempted.has(pw)) return;
+  if (pw.value || isLikelyNewPasswordField(pw)) {
+    autoFillAttempted.add(pw);
+    return;
+  }
+  const userField = findUsernameField(pw);
+  if (userField && userField.value) {
+    autoFillAttempted.add(pw);
+    return;
+  }
+  let matches = knownMatches;
+  if (!matches) {
+    if (!(await vaultReady())) return; // locked/unset — leave unmarked, retry on next scan/focus
+    matches = await query();
+  }
+  autoFillAttempted.add(pw);
+  fieldMatches.set(pw, matches);
+  if (matches.length > 0) fillWith(pw, matches[0]!);
+}
+
+function openPicker(pw: HTMLInputElement, matches: AutofillMatch[], anchor: HTMLInputElement = pw): void {
   closePicker();
-  const r = pw.getBoundingClientRect();
+  closeGen();
+  closeLockPrompt();
+  const W = 300; // same card width/anchor algorithm as the generator, so it appears in the same place
+  const { left, top } = anchorCardNextTo(anchor, W);
   const host = document.createElement('div');
-  host.style.cssText = `position:fixed;left:${Math.round(r.left)}px;top:${Math.round(
-    r.bottom + 4,
-  )}px;width:${Math.max(240, Math.round(r.width))}px;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
+  host.style.cssText = `position:fixed;left:${Math.round(left)}px;top:${Math.round(
+    top,
+  )}px;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
   const shadow = host.attachShadow({ mode: 'closed' });
   const rows = matches
     .map(
@@ -206,11 +244,13 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
     .join('');
   shadow.innerHTML = `
     <style>
-      @keyframes pm-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-      .box{background:#1a1622;border:1px solid rgba(109,92,224,.4);border-radius:12px;padding:5px;
-        box-shadow:0 12px 30px rgba(0,0,0,.5),0 0 16px rgba(109,92,224,.2);animation:pm-in .14s ease-out;
-        max-height:230px;overflow-y:auto}
-      .hd{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:rgba(233,231,239,.4);padding:5px 8px 3px}
+      @keyframes pm-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+      .card{width:${W}px;background:#1a1622;color:#e9e7ef;border:1px solid rgba(109,92,224,.35);
+        border-radius:14px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.55),0 0 22px rgba(109,92,224,.22);
+        animation:pm-in .16s ease-out}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:13px;font-weight:600}
+      .hd svg{color:#8b78ea}
+      .list{max-height:250px;overflow-y:auto;margin:0 -6px;padding:0 6px}
       .row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;
         border-radius:9px;padding:8px;cursor:pointer;color:#e9e7ef}
       .row:hover{background:rgba(109,92,224,.18)}
@@ -219,7 +259,14 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[]): void {
       .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .sub{font-size:11px;color:rgba(233,231,239,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     </style>
-    <div class="box"><div class="hd">Password Manager</div>${rows}</div>`;
+    <div class="card" role="dialog" aria-label="Password Manager accounts">
+      <div class="hd">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Password Manager
+      </div>
+      <div class="list">${rows}</div>
+    </div>`;
   document.documentElement.appendChild(host);
   pickerHost = host;
   pickerField = pw;
@@ -240,6 +287,12 @@ interface Badge {
   host: HTMLDivElement;
   btn: HTMLButtonElement;
   inset: number; // px to shift left so we clear the site's own in-field controls (eye/clear/etc.)
+  // The password field this badge actually operates on. Equal to the badge's own field for a
+  // password-field badge; for a username/email companion badge (added so BOTH fields show the icon,
+  // Kaspersky-style) it points at the associated password field, since that's what vault reads/writes
+  // and lock/picker/generator state all key off — the badge is just a second entry point to the same
+  // card, anchored at wherever it was clicked.
+  pwField: HTMLInputElement;
 }
 const badges = new Map<HTMLInputElement, Badge>();
 
@@ -314,9 +367,18 @@ function positionBadge(field: HTMLInputElement, badge: Badge): void {
   badge.host.style.top = `${Math.round(r.top + r.height / 2 - 12)}px`;
 }
 
-/** Create the persistent badge for a field if it doesn't have one yet. */
-function ensureBadge(field: HTMLInputElement): void {
-  if (badges.has(field)) return;
+/**
+ * Create the persistent badge for a field if it doesn't have one yet. `pwField` is the password
+ * field this badge's card should actually operate on/anchor state to — defaults to `field` itself
+ * (a password-field badge); pass the password field explicitly when adding a companion badge to a
+ * username/email field so both icons drive the same underlying lock/picker/generator state.
+ */
+function ensureBadge(field: HTMLInputElement, pwField: HTMLInputElement = field): void {
+  const existing = badges.get(field);
+  if (existing) {
+    existing.pwField = pwField; // keep pointing at the right password field if remapped by a rescan
+    return;
+  }
   const host = document.createElement('div');
   host.style.cssText =
     'position:fixed;z-index:2147483646;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
@@ -328,21 +390,22 @@ function ensureBadge(field: HTMLInputElement): void {
       .key:hover{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
       .key.active{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
     </style>
-    <button class="key" title="Password generator" tabindex="-1" aria-label="Toggle password generator">${KEY_SVG}</button>`;
+    <button class="key" title="Password Manager" tabindex="-1" aria-label="Open Password Manager">${KEY_SVG}</button>`;
   document.documentElement.appendChild(host);
   const btn = shadow.querySelector<HTMLButtonElement>('.key')!;
-  const badge: Badge = { host, btn, inset: computeRightInset(field) };
+  const badge: Badge = { host, btn, inset: computeRightInset(field), pwField };
   badges.set(field, badge);
   positionBadge(field, badge);
   btn.addEventListener('mousedown', (e) => {
     e.preventDefault(); // keep focus on the field
     void (async () => {
+      const pw = badge.pwField;
       // Locked/not-set-up vault looks identical to "no saved logins" from autofillQuery's point of
       // view — check real vault state first so a locked vault never gets offered a fresh generated
       // password instead of "please unlock".
       if (!(await vaultReady())) {
-        if (lockHost && lockField === field) closeLockPrompt();
-        else openLockPrompt(field);
+        if (lockHost && lockField === pw) closeLockPrompt();
+        else openLockPrompt(pw, field);
         return;
       }
       // If this field has saved logins, the badge is a toggle for the accounts picker (not the
@@ -353,17 +416,17 @@ function ensureBadge(field: HTMLInputElement): void {
       // without refocusing the field), and a stale empty result would wrongly fall through to the
       // generator here.
       const matches = await query();
-      fieldMatches.set(field, matches);
+      fieldMatches.set(pw, matches);
       if (matches.length > 0) {
-        if (pickerHost && pickerField === field) closePicker();
-        else openPicker(field, matches);
+        if (pickerHost && pickerField === pw) closePicker();
+        else openPicker(pw, matches, field);
         return;
       }
-      if (genHost && genField === field) {
-        noAutoOpen.add(field); // don't let a re-focus immediately reopen what the user just closed
+      if (genHost && genField === pw) {
+        noAutoOpen.add(pw); // don't let a re-focus immediately reopen what the user just closed
         closeGen();
       } else {
-        openGenerator(field);
+        openGenerator(pw, field);
       }
     })();
   });
@@ -390,22 +453,35 @@ function refreshBadges(recompute = false): void {
   for (const [field, badge] of badges) {
     if (recompute) badge.inset = computeRightInset(field);
     positionBadge(field, badge);
+    // Compare against badge.pwField (not `field`) so a username-companion badge lights up together
+    // with its password badge whenever either one's card is open.
     badge.btn.classList.toggle(
       'active',
-      (!!genHost && genField === field) ||
-        (!!pickerHost && pickerField === field) ||
-        (!!lockHost && lockField === field),
+      (!!genHost && genField === badge.pwField) ||
+        (!!pickerHost && pickerField === badge.pwField) ||
+        (!!lockHost && lockField === badge.pwField),
     );
   }
 }
 
-/** Sweep the DOM: add badges for newly-detected password fields, drop badges for vanished ones. */
+/**
+ * Sweep the DOM: add badges for newly-detected password fields (plus a companion badge on each
+ * one's associated username/email field, so both fields show the icon like Kaspersky/Bitwarden),
+ * drop badges for vanished fields, and opportunistically silent-autofill any freshly-detected,
+ * still-empty login field.
+ */
 function scanFields(): void {
   const present = new Set<HTMLInputElement>();
   for (const el of document.querySelectorAll<HTMLInputElement>(PW_SELECTOR)) {
     if (!isVisible(el)) continue;
     present.add(el);
     ensureBadge(el);
+    void attemptAutoFill(el);
+    const userField = findUsernameField(el);
+    if (userField && isVisible(userField)) {
+      present.add(userField);
+      ensureBadge(userField, el);
+    }
   }
   for (const field of [...badges.keys()]) {
     if (!present.has(field)) removeBadge(field);
@@ -415,6 +491,10 @@ function scanFields(): void {
 
 let genHost: HTMLDivElement | null = null;
 let genField: HTMLInputElement | null = null;
+// The field the generator card is visually anchored to — normally genField itself, but when opened
+// from a username-field badge (badge.pwField points at the real password field) it's the username
+// field, so the card pops out next to whichever icon was actually clicked.
+let genAnchor: HTMLInputElement | null = null;
 const genOpts = { length: 20, uppercase: true, lowercase: true, digits: true, symbols: true };
 // Fields the user has explicitly closed the generator on — suppresses auto-open on the next focus
 // (so re-clicking into the field doesn't reopen a card they just dismissed).
@@ -424,23 +504,13 @@ function closeGen(): void {
   genHost?.remove();
   genHost = null;
   genField = null;
+  genAnchor = null;
   refreshBadges(); // clear the active state on whichever badge owned the card
 }
 
 function positionGen(): void {
   if (!genHost || !genField) return;
-  const r = genField.getBoundingClientRect();
-  const W = 300;
-  const spaceRight = window.innerWidth - r.right;
-  let left: number;
-  let top: number;
-  if (spaceRight >= W + 12) {
-    left = r.right + 8; // to the right of the field
-    top = r.top;
-  } else {
-    left = Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8)); // below, right-aligned
-    top = r.bottom + 6;
-  }
+  const { left, top } = anchorCardNextTo(genAnchor ?? genField, 300);
   genHost.style.left = `${Math.round(left)}px`;
   genHost.style.top = `${Math.round(top)}px`;
 }
@@ -455,10 +525,12 @@ function fillConfirm(pw: HTMLInputElement, value: string): void {
   }
 }
 
-function openGenerator(pw: HTMLInputElement): void {
+function openGenerator(pw: HTMLInputElement, anchor: HTMLInputElement = pw): void {
   closePicker();
+  closeLockPrompt();
   closeGen();
   genField = pw;
+  genAnchor = anchor;
   const host = document.createElement('div');
   host.style.cssText =
     'position:fixed;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
@@ -799,24 +871,32 @@ function attach(): void {
     attributeFilter: ['type', 'style', 'class', 'hidden'],
   });
 
-  // On focus of a password field: offer saved logins (existing site) or auto-open the generator
-  // (empty new-password field, e.g. a signup form). The badge itself is already persistent.
+  // On focus of a password field OR its username/email companion (both carry a badge): silently
+  // auto-fill the best saved match if there is one (Kaspersky-style — no picker interaction needed,
+  // the icon is just there to switch accounts), auto-open the generator for a likely new-password
+  // field, or prompt to unlock a locked vault. The picker/generator/lock-prompt only ever pop open
+  // from here for the locked-vault and new-password cases; the account picker itself is now
+  // click-to-open-only (via the badge), never focus-triggered, since auto-fill already covers the
+  // common case.
   document.addEventListener(
     'focusin',
     async (e) => {
       const t = e.target as HTMLElement | null;
-      if (!(t instanceof HTMLInputElement) || !t.matches(PW_SELECTOR) || !isVisible(t)) return;
-      ensureBadge(t); // in case this field only became detectable at focus time
+      if (!(t instanceof HTMLInputElement) || !isVisible(t)) return;
+      if (t.matches(PW_SELECTOR)) ensureBadge(t); // in case this field only became detectable at focus time
+      const badge = badges.get(t);
+      if (!badge) return; // not a field we've badged (password field or its username companion)
+      const pw = badge.pwField;
       const [ready, matches] = await Promise.all([vaultReady(), query()]);
       if (document.activeElement !== t) return;
-      fieldMatches.set(t, matches); // let the badge know whether this field has saved logins
+      fieldMatches.set(pw, matches); // let the badge know whether this field has saved logins
       refreshBadges();
       if (!ready) {
-        if (!noAutoOpen.has(t)) openLockPrompt(t); // locked: never guess "new field" instead
+        if (!noAutoOpen.has(pw)) openLockPrompt(pw, t); // locked: never guess "new field" instead
       } else if (matches.length > 0) {
-        openPicker(t, matches);
-      } else if (!t.value && isLikelyNewPasswordField(t) && !noAutoOpen.has(t) && !genHost) {
-        openGenerator(t); // likely a new-password / registration field
+        void attemptAutoFill(pw, matches);
+      } else if (t === pw && !t.value && isLikelyNewPasswordField(t) && !noAutoOpen.has(pw) && !genHost) {
+        openGenerator(t, t); // likely a new-password / registration field
       }
     },
     true,
@@ -867,6 +947,7 @@ function attach(): void {
       refreshBadges(false); // scroll: field + its controls move together, cached inset still valid
       positionGen();
       closePicker();
+      closeLockPrompt(); // not repositioned live like the generator — just drop it, same as the picker
     },
     true,
   );
@@ -876,6 +957,7 @@ function attach(): void {
       refreshBadges(true); // resize can reflow the field's controls → re-measure the inset
       positionGen();
       closePicker();
+      closeLockPrompt();
     },
     true,
   );

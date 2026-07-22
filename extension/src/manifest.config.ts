@@ -10,9 +10,9 @@ import { defineManifest } from '@crxjs/vite-plugin';
 export default defineManifest({
   manifest_version: 3,
   name: 'Password Manager',
-  version: '0.7.6',
+  version: '0.8.0',
   description:
-    'Self-hosted, zero-knowledge password manager with one-click autofill (auto-fills the best saved match, no picker needed), a matching key icon on both username and password fields, a category-rail app window (websites, authenticator codes, passkeys, API keys/secrets, identities, bank cards, notes, favorites) with subtle card outlines, password generator, authoritative passkey (WebAuthn) support, and multi-language save-prompt detection for modern sign-in/sign-up forms.',
+    'Self-hosted, zero-knowledge password manager with one-click autofill (auto-fills the best saved match, no picker needed), a matching key icon on both username and password fields, a category-rail app window (websites, authenticator codes, passkeys, API keys/secrets, identities, bank cards, notes, favorites) with hover-to-preview quick copy/reveal on saved entries, password generator, authoritative passkey (WebAuthn) support, and multi-language save-prompt detection for modern sign-in/sign-up forms.',
   action: {
     default_popup: 'index.html',
     default_title: 'Password Manager',
@@ -51,7 +51,7 @@ export default defineManifest({
   content_security_policy: {
     extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
   },
-  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'alarms', 'webAuthenticationProxy'],
+  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'alarms', 'webAuthenticationProxy', 'favicon'],
   host_permissions: [
     'https://password-manager.fayber.dev/*',
     'http://192.168.178.2:8787/*',

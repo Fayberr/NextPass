@@ -282,7 +282,9 @@ export class SessionManager {
           (r.type === 'card' && cardNumber ? `•••• ${cardNumber.slice(-4)}` : null) ??
           (fields.city as string) ??
           null,
-        uris: (fields.uris as string[]) ?? [],
+        // Passkeys don't have a `uris` field (they store `rpId`, the relying-party domain) —
+        // synthesize one so the list's favicon lookup (keyed off the first uri) works for them too.
+        uris: (fields.uris as string[]) ?? (r.type === 'passkey' && fields.rpId ? [fields.rpId as string] : []),
         favorite: r.favorite,
         // Standalone authenticator entries carry their secret so the list can render a live code.
         totp: r.type === 'totp' ? (fields.secret as string) : undefined,

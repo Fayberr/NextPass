@@ -134,7 +134,7 @@ export function VaultList({
                     {item.totp ? (
                       <KeyRound size={16} className="text-violet-soft" />
                     ) : fav ? (
-                      <img src={fav} alt="" className="h-4 w-4" />
+                      <img src={fav} alt="" className="h-full w-full object-cover" />
                     ) : RowIcon ? (
                       <RowIcon size={16} className="text-white/40" />
                     ) : (

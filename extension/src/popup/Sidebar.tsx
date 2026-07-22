@@ -74,6 +74,10 @@ export function Sidebar({
   onSelect: (c: Category) => void;
   onGenerator: () => void;
 }) {
+  const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest
+    ? chrome.runtime.getManifest().version
+    : '';
+
   return (
     <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-white/10 bg-white/[0.035] py-3">
       {CATEGORIES.map(({ key, icon: Icon, title }) => (
@@ -85,6 +89,12 @@ export function Sidebar({
       <RailButton active={active === 'generator'} title="Generator" onClick={onGenerator}>
         <Wand size={18} />
       </RailButton>
+      <div className="flex-1" />
+      {version && (
+        <span title={`Version ${version}`} className="select-none pb-0.5 text-[9px] text-white/25">
+          v{version}
+        </span>
+      )}
     </nav>
   );
 }

@@ -32,6 +32,47 @@ function isLikelyNewPasswordField(pw: HTMLInputElement): boolean {
   return pwFields.length > 1;
 }
 
+// Locale-aware word lists (same word-run technique as SUBMIT_KEYWORDS/normalizeWords further down,
+// hoisted-function-callable from here since this module is bundled as one top-level scope) for
+// telling a "create a brand-new account" control apart from an ordinary "sign in" one. Deliberately
+// narrower than SUBMIT_KEYWORDS (which conflates both) — only words that specifically signal
+// account CREATION are included, so an ordinary login button with e.g. "Continue" never matches.
+const REGISTER_KEYWORDS = new Set([
+  // English
+  'register', 'signup', 'join',
+  // German
+  'registrieren', 'erstellen',
+  // Spanish
+  'registrarse', 'crear',
+  // French
+  'inscription', 'inscrire', 'créer', 'creer',
+]);
+
+/**
+ * Best-effort "is this a brand-new-account registration form, not an ordinary login form" check.
+ * Used to decide whether the password field's key icon should default to offering the generator
+ * (a fresh password) instead of the "fill an existing saved account" picker, even when saved
+ * logins for the site already exist (e.g. registering a second account, or re-registering after a
+ * previous session already saved a login for this domain — the confirmed real-world case on
+ * demoqa.com's "Register to Book Store" form).
+ *
+ * `isLikelyNewPasswordField` (autocomplete=new-password, or a confirm/repeat sibling field) is
+ * checked first and is authoritative when it fires, but it's not sufficient on its own: demoqa's
+ * register form (and plenty of real sites) has exactly ONE password field with no autocomplete
+ * hint at all. As a second signal we look at the nearest VISIBLE submit-style control's accessible
+ * label within the same form scope and classify it by keyword — reusing the same locale-aware
+ * word-matching technique as `looksLikeSubmitControl` (see below), just against a register-specific
+ * word list instead of the general submit-word list.
+ */
+function isLikelyRegisterForm(pw: HTMLInputElement): boolean {
+  if (isLikelyNewPasswordField(pw)) return true;
+  const scope = pw.closest('form') ?? document;
+  const controls = Array.from(
+    scope.querySelectorAll<HTMLElement>('button, input[type="submit"], input[type="button"], [role="button"]'),
+  ).filter(isVisible);
+  return controls.some((el) => normalizeWords(controlLabel(el)).some((w) => REGISTER_KEYWORDS.has(w)));
+}
+
 /** Find the username field associated with a given password field (positional heuristic). */
 function findUsernameField(pw: HTMLInputElement): HTMLInputElement | null {
   const inputs = Array.from(
@@ -415,9 +456,14 @@ function ensureBadge(field: HTMLInputElement, pwField: HTMLInputElement = field)
       // an earlier focus while the vault was still locked (e.g. user just unlocked via the popup
       // without refocusing the field), and a stale empty result would wrongly fall through to the
       // generator here.
+      //
+      // Exception: on a registration/signup form (isLikelyRegisterForm), always prefer the
+      // generator even if the site already has saved matches elsewhere (e.g. from a separate login
+      // form on the same domain) — the user is creating a new credential here, not signing in with
+      // an old one, so the picker is the wrong offer regardless of what's saved for this site.
       const matches = await query();
       fieldMatches.set(pw, matches);
-      if (matches.length > 0) {
+      if (matches.length > 0 && !isLikelyRegisterForm(pw)) {
         if (pickerHost && pickerField === pw) closePicker();
         else openPicker(pw, matches, field);
         return;
@@ -895,7 +941,7 @@ function attach(): void {
         if (!noAutoOpen.has(pw)) openLockPrompt(pw, t); // locked: never guess "new field" instead
       } else if (matches.length > 0) {
         void attemptAutoFill(pw, matches);
-      } else if (t === pw && !t.value && isLikelyNewPasswordField(t) && !noAutoOpen.has(pw) && !genHost) {
+      } else if (t === pw && !t.value && isLikelyRegisterForm(t) && !noAutoOpen.has(pw) && !genHost) {
         openGenerator(t, t); // likely a new-password / registration field
       }
     },

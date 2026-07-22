@@ -130,7 +130,7 @@ export function VaultList({
                   onClick={() => onSelect(item.id)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
                     {item.totp ? (
                       <KeyRound size={16} className="text-violet-soft" />
                     ) : fav ? (
@@ -148,7 +148,7 @@ export function VaultList({
                       {item.name}
                     </div>
                     {item.username && (
-                      <div className="mt-1 truncate text-xs text-white/40">{item.username}</div>
+                      <div className="mt-1.5 truncate text-xs text-white/40">{item.username}</div>
                     )}
                   </div>
                 </button>

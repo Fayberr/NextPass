@@ -12,6 +12,7 @@ import {
   EyeOff,
   Copy,
   Check,
+  ChevronDown,
 } from '../icons.js';
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
@@ -51,6 +52,45 @@ function faviconFor(uris: string[]): string | null {
 
 function siteHref(u: string): string {
   return u.includes('://') ? u : `https://${u}`;
+}
+
+/** Normalized hostname (no "www.") used as the grouping key for logins — two saved accounts
+ *  for the same site (e.g. two demoqa.com logins) should visually nest under one site card
+ *  instead of appearing as unrelated flat rows. */
+function hostnameOf(uris: string[]): string | null {
+  const u = uris.find(Boolean);
+  if (!u) return null;
+  try {
+    const href = u.includes('://') ? u : `https://${u}`;
+    let h = new URL(href).hostname.toLowerCase();
+    if (h.startsWith('www.')) h = h.slice(4);
+    return h || null;
+  } catch {
+    return null;
+  }
+}
+
+interface ItemGroup {
+  key: string;
+  items: ItemSummary[];
+}
+
+/** Groups logins sharing a normalized hostname; items without a parseable URL (or falling
+ *  back to a shared exact name) still get grouped by name so nothing regresses to ungrouped. */
+function groupByWebsite(list: ItemSummary[]): ItemGroup[] {
+  const map = new Map<string, ItemGroup>();
+  const order: string[] = [];
+  for (const item of list) {
+    const key = hostnameOf(item.uris) ?? `name:${item.name.trim().toLowerCase()}`;
+    let g = map.get(key);
+    if (!g) {
+      g = { key, items: [] };
+      map.set(key, g);
+      order.push(key);
+    }
+    g.items.push(item);
+  }
+  return order.map((k) => map.get(k)!);
 }
 
 const CATEGORY_LABEL: Record<Category, string> = {
@@ -176,6 +216,16 @@ export function VaultList({
   const [detail, setDetail] = useState<Record<string, Record<string, unknown>>>({});
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -240,6 +290,152 @@ export function VaultList({
   // isn't a creation context, so the "Add" footer is hidden for those two only.
   const showAdd = category !== 'passkey' && category !== 'favorites';
 
+  // Only logins get grouped by website — the other categories (secrets, cards, notes,
+  // identities) don't have the "same site, multiple accounts" scenario this solves.
+  const groups: ItemGroup[] =
+    category === 'login' ? groupByWebsite(filtered) : filtered.map((i) => ({ key: i.id, items: [i] }));
+
+  function renderRow(item: ItemSummary, nested = false) {
+    const fav = faviconFor(item.uris);
+    const site = item.uris.find(Boolean);
+    const RowIcon = ROW_ICON[item.type as Category];
+    const isOpen = openId === item.id;
+    const quickFields = quickFieldsFor(item.type, detail[item.id]);
+    return (
+      <div
+        key={item.id}
+        onMouseEnter={() => handleEnter(item.id)}
+        onMouseLeave={() => handleLeave(item.id)}
+        className={`flex w-full flex-col rounded-xl border border-transparent bg-white/[0.035] px-3 py-2.5 transition-colors duration-200 ease-out hover:bg-white/[0.065] ${
+          nested ? '' : 'mb-1.5'
+        }`}
+      >
+        <div className="flex w-full items-center gap-3">
+          <button onClick={() => onSelect(item.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+              {item.totp ? (
+                <KeyRound size={16} className="text-violet-soft" />
+              ) : fav ? (
+                <img src={fav} alt="" className="h-full w-full object-cover" />
+              ) : RowIcon ? (
+                <RowIcon size={16} className="text-white/40" />
+              ) : (
+                <span className="text-xs text-white/40">{item.name.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold tracking-tight text-white/90">{item.name}</div>
+              {item.username && <div className="mt-1.5 truncate text-xs text-white/40">{item.username}</div>}
+            </div>
+          </button>
+          {item.totp && (
+            <div className="shrink-0">
+              <TotpCode secret={item.totp} label="" compact />
+            </div>
+          )}
+          {site && (
+            <a
+              href={siteHref(site)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Open site"
+              className="shrink-0 rounded-md p-1 text-white/20 transition hover:bg-white/10 hover:text-white/50"
+            >
+              <ExternalLink size={14} />
+            </a>
+          )}
+          <span
+            role="button"
+            tabIndex={0}
+            title={item.favorite ? 'Unfavorite' : 'Favorite'}
+            onClick={(e) => {
+              e.stopPropagation();
+              void toggleFav(item.id, !item.favorite);
+            }}
+            className={`shrink-0 cursor-pointer rounded-md p-1 transition hover:bg-white/10 ${
+              item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
+            }`}
+          >
+            <Star size={14} filled={item.favorite} />
+          </span>
+        </div>
+
+        {quickFields.length > 0 && (
+          <div
+            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+              isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="mt-2 space-y-1.5 border-t border-[rgba(255,255,255,0.06)] pt-2 pl-10">
+                {quickFields.map((f) => {
+                  const key = `${item.id}:${f.key}`;
+                  return (
+                    <QuickRow
+                      key={f.key}
+                      field={f}
+                      revealed={revealed.has(key)}
+                      copied={copiedKey === key}
+                      onToggleReveal={() => toggleReveal(key)}
+                      onCopy={() => void copyField(key, f.value)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderGroup(group: ItemGroup) {
+    const first = group.items[0];
+    if (!first) return null;
+    if (group.items.length === 1) return renderRow(first);
+    const fav = faviconFor(first.uris);
+    const collapsed = collapsedGroups.has(group.key);
+    return (
+      <div
+        key={group.key}
+        className="mb-1.5 overflow-hidden rounded-xl border border-[rgba(255,255,255,0.05)] bg-white/[0.02]"
+      >
+        <button
+          onClick={() => toggleGroup(group.key)}
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+            {fav ? (
+              <img src={fav} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-xs text-white/40">{first.name.charAt(0).toUpperCase()}</span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold tracking-tight text-white/90">{first.name}</div>
+            <div className="mt-1.5 truncate text-xs text-white/40">{group.items.length} accounts</div>
+          </div>
+          <ChevronDown
+            size={14}
+            className={`shrink-0 text-white/30 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+          />
+        </button>
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+            collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-1 border-t border-[rgba(255,255,255,0.05)] p-1.5">
+              {group.items.map((item) => renderRow(item, true))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
@@ -257,107 +453,7 @@ export function VaultList({
             {byCategory.length === 0 ? 'No items yet.' : 'No matches.'}
           </p>
         ) : (
-          filtered.map((item) => {
-            const fav = faviconFor(item.uris);
-            const site = item.uris.find(Boolean);
-            const RowIcon = ROW_ICON[item.type as Category];
-            const isOpen = openId === item.id;
-            const quickFields = quickFieldsFor(item.type, detail[item.id]);
-            return (
-              <div
-                key={item.id}
-                onMouseEnter={() => handleEnter(item.id)}
-                onMouseLeave={() => handleLeave(item.id)}
-                className="mb-1.5 flex w-full flex-col rounded-xl border border-transparent bg-white/[0.035] px-3 py-2.5 transition-colors duration-200 ease-out hover:bg-white/[0.065]"
-              >
-                <div className="flex w-full items-center gap-3">
-                  <button
-                    onClick={() => onSelect(item.id)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
-                      {item.totp ? (
-                        <KeyRound size={16} className="text-violet-soft" />
-                      ) : fav ? (
-                        <img src={fav} alt="" className="h-full w-full object-cover" />
-                      ) : RowIcon ? (
-                        <RowIcon size={16} className="text-white/40" />
-                      ) : (
-                        <span className="text-xs text-white/40">
-                          {item.name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold tracking-tight text-white/90">
-                        {item.name}
-                      </div>
-                      {item.username && (
-                        <div className="mt-1.5 truncate text-xs text-white/40">{item.username}</div>
-                      )}
-                    </div>
-                  </button>
-                  {item.totp && (
-                    <div className="shrink-0">
-                      <TotpCode secret={item.totp} label="" compact />
-                    </div>
-                  )}
-                  {site && (
-                    <a
-                      href={siteHref(site)}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      title="Open site"
-                      className="shrink-0 rounded-md p-1 text-white/20 transition hover:bg-white/10 hover:text-white/50"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    title={item.favorite ? 'Unfavorite' : 'Favorite'}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void toggleFav(item.id, !item.favorite);
-                    }}
-                    className={`shrink-0 cursor-pointer rounded-md p-1 transition hover:bg-white/10 ${
-                      item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
-                    }`}
-                  >
-                    <Star size={14} filled={item.favorite} />
-                  </span>
-                </div>
-
-                {quickFields.length > 0 && (
-                  <div
-                    className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
-                      isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                    }`}
-                  >
-                    <div className="overflow-hidden">
-                      <div className="mt-2 space-y-1.5 border-t border-[rgba(255,255,255,0.06)] pt-2 pl-10">
-                        {quickFields.map((f) => {
-                          const key = `${item.id}:${f.key}`;
-                          return (
-                            <QuickRow
-                              key={f.key}
-                              field={f}
-                              revealed={revealed.has(key)}
-                              copied={copiedKey === key}
-                              onToggleReveal={() => toggleReveal(key)}
-                              onCopy={() => void copyField(key, f.value)}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
+          groups.map((group) => renderGroup(group))
         )}
       </div>
 

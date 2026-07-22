@@ -37,7 +37,7 @@ export function TopBar({
   }, [menuOpen]);
 
   return (
-    <div className="flex items-center gap-2 border-b border-white/8 p-3">
+    <div className="flex items-center gap-2 border-b border-white/10 p-3">
       {search ? (
         <Input
           placeholder="Search…"

@@ -53,7 +53,7 @@ export function Sidebar({
   onGenerator: () => void;
 }) {
   return (
-    <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-white/8 bg-white/[0.015] py-3">
+    <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-white/10 bg-white/[0.035] py-3">
       {CATEGORIES.map(({ key, icon: Icon, title }) => (
         <RailButton key={key} active={active === key} title={title} onClick={() => onSelect(key)}>
           <Icon size={18} />

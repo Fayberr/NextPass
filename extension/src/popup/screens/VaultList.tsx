@@ -101,7 +101,7 @@ export function VaultList({
             return (
               <div
                 key={item.id}
-                className="mb-1.5 flex w-full items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 transition hover:border-white/15 hover:bg-white/5"
+                className="mb-1.5 flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 transition hover:border-white/15 hover:bg-white/5"
               >
                 <button
                   onClick={() => onSelect(item.id)}
@@ -163,7 +163,7 @@ export function VaultList({
       </div>
 
       {showAdd && (
-        <footer className="flex gap-2 border-t border-white/8 p-3">
+        <footer className="flex gap-2 border-t border-white/10 p-3">
           {category === 'login' ? (
             <Button className="flex-1" onClick={onAdd}>
               <Plus size={16} /> Add login

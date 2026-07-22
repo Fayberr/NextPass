@@ -10,9 +10,9 @@ import { defineManifest } from '@crxjs/vite-plugin';
 export default defineManifest({
   manifest_version: 3,
   name: 'Password Manager',
-  version: '0.6.0',
+  version: '0.6.1',
   description:
-    'Self-hosted, zero-knowledge password manager with one-click autofill (auto-fills the best saved match, no picker needed), a matching key icon on both username and password fields, a redesigned category-rail app window (websites, authenticator codes, passkeys, favorites), password generator, authoritative passkey (WebAuthn) support, and multi-language save-prompt detection for modern sign-in/sign-up forms.',
+    'Self-hosted, zero-knowledge password manager with one-click autofill (auto-fills the best saved match, no picker needed), a matching key icon on both username and password fields, a redesigned category-rail app window (websites, authenticator codes, passkeys, favorites) with subtle card outlines, password generator, authoritative passkey (WebAuthn) support, and multi-language save-prompt detection for modern sign-in/sign-up forms.',
   action: {
     default_popup: 'index.html',
     default_title: 'Password Manager',

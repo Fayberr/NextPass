@@ -88,7 +88,7 @@ export function AddLogin({
   }
 
   return (
-    <div className="flex h-[500px] flex-col">
+    <div className="flex h-full flex-col">
       <header className="flex items-center gap-2 border-b border-white/5 p-3">
         <Button variant="subtle" onClick={onCancel}>
           <ArrowLeft size={16} /> Cancel

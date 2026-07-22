@@ -180,3 +180,51 @@ export function ArrowLeft(props: IconProps) {
     </Svg>
   );
 }
+
+export function Globe(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </Svg>
+  );
+}
+
+export function Smartphone(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </Svg>
+  );
+}
+
+export function UserRound(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M20 21a8 8 0 0 0-16 0" />
+    </Svg>
+  );
+}
+
+export function MoreVertical(props: IconProps) {
+  return (
+    <Svg {...props} fill="currentColor" stroke="none">
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+    </Svg>
+  );
+}
+
+export function ExternalLink(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </Svg>
+  );
+}

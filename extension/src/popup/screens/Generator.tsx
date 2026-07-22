@@ -52,7 +52,7 @@ export function Generator({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="flex h-[500px] flex-col">
+    <div className="flex h-full flex-col">
       <header className="flex items-center gap-2 border-b border-white/5 p-3">
         <Button variant="subtle" onClick={onBack}>
           <ArrowLeft size={16} /> Back

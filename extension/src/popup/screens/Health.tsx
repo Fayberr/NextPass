@@ -30,7 +30,7 @@ export function Health({ onBack, onSelect }: { onBack: () => void; onSelect: (id
   const flagged = report?.entries.filter((e) => e.issues.length > 0) ?? [];
 
   return (
-    <div className="flex h-[500px] flex-col">
+    <div className="flex h-full flex-col">
       <header className="flex items-center gap-2 border-b border-white/5 p-3">
         <Button variant="subtle" onClick={onBack}>
           <ArrowLeft size={16} /> Back

@@ -5,7 +5,7 @@
  * memory, iframe handling) is Phase 3 per the spec.
  */
 
-import type { AutofillMatch, Msg, MsgResult } from '../lib/messages.js';
+import type { AutofillMatch, AutofillIdentityMatch, Msg, MsgResult } from '../lib/messages.js';
 import { generatePassword, passwordStrength, type LoginFields } from '@pm/shared';
 
 const PW_SELECTOR = 'input[type="password"]';
@@ -120,6 +120,11 @@ async function query(): Promise<AutofillMatch[]> {
   return res?.ok && res.kind === 'autofill' ? res.matches : [];
 }
 
+async function identityQuery(): Promise<AutofillIdentityMatch[]> {
+  const res = await sendMsg({ kind: 'autofill_identity_query' });
+  return res?.ok && res.kind === 'identity_autofill' ? res.matches : [];
+}
+
 /**
  * Whether there's an unlocked vault to autofill/generate against. Without this, a locked vault
  * looks identical to "no saved logins" (autofillQuery returns [] either way) — which used to make
@@ -182,6 +187,7 @@ function openLockPrompt(pw: HTMLInputElement, anchor: HTMLInputElement = pw): vo
   closePicker();
   closeGen();
   closeLockPrompt();
+  closeIdentityPicker();
   const W = 300; // same card width as the generator
   const { left, top } = anchorCardNextTo(anchor, W);
   const host = document.createElement('div');
@@ -262,6 +268,7 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[], anchor: HTML
   closePicker();
   closeGen();
   closeLockPrompt();
+  closeIdentityPicker();
   const W = 300; // same card width/anchor algorithm as the generator, so it appears in the same place
   const { left, top } = anchorCardNextTo(anchor, W);
   const host = document.createElement('div');
@@ -349,7 +356,9 @@ function badgeShouldShow(field: HTMLInputElement): boolean {
 /** Is `el` one of our own injected overlay hosts (badge / picker / generator / save-card)? */
 function isOurNode(el: Element): boolean {
   if (el === genHost || el === pickerHost || el === saveHost || el === lockHost) return true;
+  if (el === identityPickerHost) return true;
   for (const { host } of badges.values()) if (el === host) return true;
+  for (const { host } of identityBadges.values()) if (el === host) return true;
   return false;
 }
 
@@ -397,7 +406,9 @@ function computeRightInset(field: HTMLInputElement): number {
   return occupied > 2 ? Math.round(occupied) + 4 : 0; // small gap so we sit just left of their control
 }
 
-function positionBadge(field: HTMLInputElement, badge: Badge): void {
+/** Structural subset of Badge/IdentityBadge — both badge kinds share the same fixed-position host
+ *  element and cached right-inset, so this one positioning routine serves both. */
+function positionBadge(field: HTMLInputElement, badge: { host: HTMLDivElement; inset: number }): void {
   if (!badgeShouldShow(field)) {
     badge.host.style.display = 'none';
     return;
@@ -533,6 +544,259 @@ function scanFields(): void {
     if (!present.has(field)) removeBadge(field);
   }
   refreshBadges(true); // DOM changed → re-measure insets (a site control may have appeared/moved)
+  scanIdentityFields();
+}
+
+// --- identity autofill (name/address/phone-style checkout & registration fields) -----------------
+//
+// Separate from the login badge system above: identities aren't password-shaped (no pwField, no
+// generator, no save-prompt) — clicking any recognized field's badge opens a small picker of saved
+// identities, and choosing one fills EVERY recognized identity field in the same form scope at once
+// (the standard "fill address" UX). Deliberately scoped to forms with NO visible password field —
+// that's what actually distinguishes a checkout/contact/shipping form from a login/register form in
+// practice, and keeps this from ever fighting the login badge for the same input (e.g. an email
+// field on a register form stays login-only; the same field on a pure checkout form gets identity
+// autofill instead).
+
+type IdentityKey =
+  | 'firstName'
+  | 'lastName'
+  | 'email'
+  | 'phone'
+  | 'address1'
+  | 'address2'
+  | 'city'
+  | 'state'
+  | 'postalCode'
+  | 'country';
+
+const IDENTITY_AC_MAP: Record<string, IdentityKey> = {
+  'given-name': 'firstName',
+  'family-name': 'lastName',
+  email: 'email',
+  tel: 'phone',
+  'tel-national': 'phone',
+  'address-line1': 'address1',
+  'address-line2': 'address2',
+  'address-level2': 'city',
+  'address-level1': 'state',
+  'postal-code': 'postalCode',
+  country: 'country',
+  'country-name': 'country',
+};
+
+// Fallback for the (common) case where a site sets no autocomplete attribute at all — matched
+// against name/id/placeholder/aria-label, same technique as USER_HINTS above. Order matters:
+// address1 must be checked before the generic "address" isn't a separate case here since line1/2
+// both require a digit or explicit "line"/"street", avoiding a bare "address" label picking line1.
+const IDENTITY_NAME_HINTS: [RegExp, IdentityKey][] = [
+  [/first.?name|fname|given.?name|vorname/i, 'firstName'],
+  [/last.?name|lname|surname|family.?name|nachname/i, 'lastName'],
+  [/e.?mail/i, 'email'],
+  [/phone|tel(ephone)?|mobile|telefon/i, 'phone'],
+  [/address.?(line)?.?2|apt|suite|unit|adresszusatz/i, 'address2'],
+  [/address.?(line)?.?1?|street|strasse|straße/i, 'address1'],
+  [/city|town|ort\b|stadt/i, 'city'],
+  [/state|province|region|bundesland/i, 'state'],
+  [/zip|postal|postcode|plz/i, 'postalCode'],
+  [/country|land\b/i, 'country'],
+];
+
+function identityFieldKey(el: HTMLInputElement): IdentityKey | null {
+  const ac = (el.getAttribute('autocomplete') ?? '').toLowerCase().trim();
+  const lastTok = ac.split(/\s+/).pop() ?? ''; // "shipping given-name" → "given-name"
+  const mapped = IDENTITY_AC_MAP[lastTok];
+  if (mapped) return mapped;
+  if (el.type === 'email') return 'email';
+  if (el.type === 'tel') return 'phone';
+  if (el.type !== 'text' && el.type !== 'search') return null;
+  const hay = `${el.name} ${el.id} ${el.placeholder} ${el.getAttribute('aria-label') ?? ''}`;
+  for (const [re, key] of IDENTITY_NAME_HINTS) if (re.test(hay)) return key;
+  return null;
+}
+
+interface IdentityBadge {
+  host: HTMLDivElement;
+  btn: HTMLButtonElement;
+  inset: number;
+  scopeFields: Map<IdentityKey, HTMLInputElement>; // every recognized field in this field's scope
+}
+const identityBadges = new Map<HTMLInputElement, IdentityBadge>();
+
+function ensureIdentityBadge(field: HTMLInputElement, scopeFields: Map<IdentityKey, HTMLInputElement>): void {
+  const existing = identityBadges.get(field);
+  if (existing) {
+    existing.scopeFields = scopeFields;
+    return;
+  }
+  const host = document.createElement('div');
+  host.style.cssText =
+    'position:fixed;z-index:2147483646;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+  const shadow = host.attachShadow({ mode: 'closed' });
+  shadow.innerHTML = `
+    <style>
+      .key{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;
+        border-radius:7px;cursor:pointer;background:rgba(109,92,224,.14);color:#8b78ea;transition:.15s}
+      .key:hover{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
+      .key.active{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
+    </style>
+    <button class="key" title="Fill from saved identity" tabindex="-1" aria-label="Fill from saved identity">${KEY_SVG}</button>`;
+  document.documentElement.appendChild(host);
+  const btn = shadow.querySelector<HTMLButtonElement>('.key')!;
+  const badge: IdentityBadge = { host, btn, inset: computeRightInset(field), scopeFields };
+  identityBadges.set(field, badge);
+  positionBadge(field, badge);
+  btn.addEventListener('mousedown', (e) => {
+    e.preventDefault(); // keep focus on the field
+    void (async () => {
+      if (!(await vaultReady())) {
+        if (lockHost && lockField === field) closeLockPrompt();
+        else openLockPrompt(field, field);
+        return;
+      }
+      if (identityPickerHost && identityPickerField === field) {
+        closeIdentityPicker();
+        return;
+      }
+      const matches = await identityQuery();
+      if (matches.length === 0) return; // nothing saved yet — no picker to show
+      openIdentityPicker(field, matches, badge.scopeFields);
+    })();
+  });
+}
+
+function removeIdentityBadge(field: HTMLInputElement): void {
+  const badge = identityBadges.get(field);
+  if (!badge) return;
+  badge.host.remove();
+  identityBadges.delete(field);
+}
+
+function refreshIdentityBadges(recompute = false): void {
+  for (const [field, badge] of identityBadges) {
+    if (recompute) badge.inset = computeRightInset(field);
+    positionBadge(field, badge);
+    badge.btn.classList.toggle('active', identityPickerHost !== null && identityPickerField === field);
+  }
+}
+
+/** Sweep visible text/email/tel inputs, grouped by form scope; only scopes with NO visible password
+ *  field (i.e. not a login/register form) are eligible, and only scopes with at least one recognized
+ *  field get badges — see the section comment above for why. */
+function scanIdentityFields(): void {
+  const present = new Set<HTMLInputElement>();
+  const scopes = new Set<ParentNode>();
+  for (const form of document.querySelectorAll('form')) scopes.add(form);
+  scopes.add(document); // form-less widgets too
+
+  for (const scope of scopes) {
+    const pwInScope = Array.from(scope.querySelectorAll<HTMLInputElement>(PW_SELECTOR)).some(isVisible);
+    if (pwInScope) continue;
+    const scopeFields = new Map<IdentityKey, HTMLInputElement>();
+    const inputs = Array.from(
+      scope.querySelectorAll<HTMLInputElement>('input:not([type="hidden"]):not([type="password"])'),
+    ).filter(isVisible);
+    for (const el of inputs) {
+      // document-scope pass shouldn't re-claim fields that already belong to a real <form> scope.
+      if (scope === document && el.closest('form')) continue;
+      const key = identityFieldKey(el);
+      if (key && !scopeFields.has(key)) scopeFields.set(key, el);
+    }
+    if (scopeFields.size === 0) continue;
+    for (const el of scopeFields.values()) {
+      present.add(el);
+      ensureIdentityBadge(el, scopeFields);
+    }
+  }
+  for (const field of [...identityBadges.keys()]) {
+    if (!present.has(field)) removeIdentityBadge(field);
+  }
+  refreshIdentityBadges(true);
+}
+
+let identityPickerHost: HTMLDivElement | null = null;
+let identityPickerField: HTMLInputElement | null = null;
+
+function closeIdentityPicker(): void {
+  identityPickerHost?.remove();
+  identityPickerHost = null;
+  identityPickerField = null;
+  refreshIdentityBadges();
+}
+
+function fillIdentityGroup(scopeFields: Map<IdentityKey, HTMLInputElement>, m: AutofillIdentityMatch): void {
+  for (const [key, el] of scopeFields) {
+    const value = m[key];
+    if (value) setValue(el, value);
+  }
+}
+
+function openIdentityPicker(
+  field: HTMLInputElement,
+  matches: AutofillIdentityMatch[],
+  scopeFields: Map<IdentityKey, HTMLInputElement>,
+): void {
+  closeIdentityPicker();
+  closePicker();
+  closeGen();
+  closeLockPrompt();
+  const W = 300;
+  const { left, top } = anchorCardNextTo(field, W);
+  const host = document.createElement('div');
+  host.style.cssText = `position:fixed;left:${Math.round(left)}px;top:${Math.round(
+    top,
+  )}px;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
+  const shadow = host.attachShadow({ mode: 'closed' });
+  const rows = matches
+    .map(
+      (m, i) => `
+      <button class="row" data-i="${i}">
+        <span class="ic">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b9aef2" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </span>
+        <span class="txt"><span class="nm">${esc(m.name)}</span>${
+          m.email ? `<span class="sub">${esc(m.email)}</span>` : ''
+        }</span>
+      </button>`,
+    )
+    .join('');
+  shadow.innerHTML = `
+    <style>
+      @keyframes pm-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+      .card{width:${W}px;background:#1a1622;color:#e9e7ef;border:1px solid rgba(109,92,224,.35);
+        border-radius:14px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.55),0 0 22px rgba(109,92,224,.22);
+        animation:pm-in .16s ease-out}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:13px;font-weight:600}
+      .hd svg{color:#8b78ea}
+      .list{max-height:250px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+      .row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;
+        border-radius:9px;padding:8px;cursor:pointer;color:#e9e7ef}
+      .row:hover{background:rgba(109,92,224,.18)}
+      .ic{flex:none;display:flex}
+      .txt{min-width:0;display:flex;flex-direction:column}
+      .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .sub{font-size:11px;color:rgba(233,231,239,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    </style>
+    <div class="card" role="dialog" aria-label="Password Manager identities">
+      <div class="hd">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Fill from saved identity
+      </div>
+      <div class="list">${rows}</div>
+    </div>`;
+  document.documentElement.appendChild(host);
+  identityPickerHost = host;
+  identityPickerField = field;
+  refreshIdentityBadges();
+  shadow.querySelectorAll<HTMLButtonElement>('.row').forEach((btn) => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      fillIdentityGroup(scopeFields, matches[Number(btn.dataset.i)]!);
+      closeIdentityPicker();
+    });
+  });
 }
 
 let genHost: HTMLDivElement | null = null;
@@ -575,6 +839,7 @@ function openGenerator(pw: HTMLInputElement, anchor: HTMLInputElement = pw): voi
   closePicker();
   closeLockPrompt();
   closeGen();
+  closeIdentityPicker();
   genField = pw;
   genAnchor = anchor;
   const host = document.createElement('div');
@@ -952,6 +1217,7 @@ function attach(): void {
     () =>
       setTimeout(() => {
         closePicker();
+        closeIdentityPicker();
         // The generator card is sticky (closed only via the badge / Escape / Use), so we never tear
         // it down on blur. Badges are persistent and are NOT removed on blur either.
       }, 150),
@@ -962,6 +1228,7 @@ function attach(): void {
     (e) => {
       if (e.key === 'Escape') {
         closePicker();
+        closeIdentityPicker();
         if (genField) noAutoOpen.add(genField);
         closeGen();
         if (lockField) noAutoOpen.add(lockField);
@@ -991,8 +1258,10 @@ function attach(): void {
     'scroll',
     () => {
       refreshBadges(false); // scroll: field + its controls move together, cached inset still valid
+      refreshIdentityBadges(false);
       positionGen();
       closePicker();
+      closeIdentityPicker();
       closeLockPrompt(); // not repositioned live like the generator — just drop it, same as the picker
     },
     true,
@@ -1001,8 +1270,10 @@ function attach(): void {
     'resize',
     () => {
       refreshBadges(true); // resize can reflow the field's controls → re-measure the inset
+      refreshIdentityBadges(true);
       positionGen();
       closePicker();
+      closeIdentityPicker();
       closeLockPrompt();
     },
     true,

@@ -40,6 +40,7 @@ import {
 import { cacheClear, cacheDelete, cacheGetAll, cacheUpsert } from './storage.js';
 import type {
   AutofillMatch,
+  AutofillIdentityMatch,
   ItemSummary,
   PasskeyCreateReq,
   PasskeyCreateRes,
@@ -670,6 +671,36 @@ export class SessionManager {
         username: (fields.username as string) ?? null,
         email: (fields.email as string) ?? null,
         password: (fields.password as string) ?? null,
+      });
+    }
+    return matches;
+  }
+
+  /** All saved autofill_identity items, decrypted. Unlike autofillQuery() (login) there's no
+   *  URL/matchMode filtering — identities aren't tied to a site, so every saved identity is
+   *  always offered, letting the content script's picker do the choosing (same as passwords). */
+  async identityQuery(): Promise<AutofillIdentityMatch[]> {
+    await this.hydrate();
+    if (!this.vaultKey) return [];
+    const records = await cacheGetAll();
+    const matches: AutofillIdentityMatch[] = [];
+    for (const r of records) {
+      if (r.deletedAt || r.type !== 'autofill_identity') continue;
+      const { fields } = await this.decryptRecord(r);
+      const f = fields as unknown as AutofillIdentityFields;
+      matches.push({
+        id: r.id,
+        name: f.name ?? '(no name)',
+        firstName: f.firstName ?? null,
+        lastName: f.lastName ?? null,
+        email: f.email ?? null,
+        phone: f.phone ?? null,
+        address1: f.address1 ?? null,
+        address2: f.address2 ?? null,
+        city: f.city ?? null,
+        state: f.state ?? null,
+        postalCode: f.postalCode ?? null,
+        country: f.country ?? null,
       });
     }
     return matches;

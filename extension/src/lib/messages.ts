@@ -69,6 +69,7 @@ export type Msg =
   | { kind: 'set_settings'; patch: Partial<Settings> }
   | { kind: 'sync' }
   | { kind: 'autofill_query'; url: string }
+  | { kind: 'autofill_identity_query' }
   | { kind: 'passkey_create'; req: PasskeyCreateReq }
   | { kind: 'passkey_get'; req: PasskeyGetReq }
   | { kind: 'open_unlock_ui' };
@@ -79,6 +80,7 @@ export type MsgResult =
   | { ok: true; kind: 'item'; id: string; type: string; fields: unknown; favorite: boolean }
   | { ok: true; kind: 'sync'; pulled: number }
   | { ok: true; kind: 'autofill'; matches: AutofillMatch[] }
+  | { ok: true; kind: 'identity_autofill'; matches: AutofillIdentityMatch[] }
   | { ok: true; kind: 'audit'; report: AuditReport }
   | { ok: true; kind: 'settings'; settings: Settings }
   | { ok: true; kind: 'passkey_created'; res: PasskeyCreateRes }
@@ -157,4 +159,22 @@ export interface AutofillMatch {
   username: string | null;
   email: string | null;
   password: string | null;
+}
+
+/** A saved autofill_identity item, decrypted, offered to the content script's identity-field
+ *  autofill (name/address/phone-style checkout & registration fields — not password matching, so
+ *  there's no URL/matchMode filtering: all saved identities are always offered, same as Bitwarden). */
+export interface AutofillIdentityMatch {
+  id: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
 }

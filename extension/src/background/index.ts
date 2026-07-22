@@ -175,6 +175,9 @@ async function handle(msg: Msg): Promise<MsgResult> {
       case 'autofill_query':
         return { ok: true, kind: 'autofill', matches: await session.autofillQuery(msg.url) };
 
+      case 'autofill_identity_query':
+        return { ok: true, kind: 'identity_autofill', matches: await session.identityQuery() };
+
       case 'passkey_create':
         return { ok: true, kind: 'passkey_created', res: await session.passkeyCreate(msg.req) };
 

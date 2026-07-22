@@ -140,7 +140,7 @@ export function AddLogin({
           </div>
 
           {genOpen && (
-            <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="mt-2 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 p-3">
               <div className="mb-3 flex items-center gap-2.5">
                 <span className="text-[11px] text-white/50">Length</span>
                 <Slider min={8} max={64} value={glen} onChange={setGlen} className="flex-1" />

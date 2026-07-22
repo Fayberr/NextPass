@@ -90,7 +90,7 @@ export function AddTotp({
         </Field>
 
         {valid && (
-          <div className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="mb-3 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 p-3">
             <TotpCode secret={secret.trim()} label="Preview" />
           </div>
         )}

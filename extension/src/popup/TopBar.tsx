@@ -37,7 +37,7 @@ export function TopBar({
   }, [menuOpen]);
 
   return (
-    <div className="flex items-center gap-2 border-b border-white/10 p-3">
+    <div className="flex items-center gap-2 border-b border-[rgba(255,255,255,0.07)] p-3">
       {search ? (
         <Input
           placeholder="Search…"
@@ -55,7 +55,7 @@ export function TopBar({
           <MoreVertical size={16} />
         </Button>
         {menuOpen && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-white/10 bg-ink-700/95 p-1 shadow-glass backdrop-blur-xl">
+          <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-[rgba(255,255,255,0.07)] bg-ink-700/95 p-1 shadow-glass backdrop-blur-xl">
             <button
               type="button"
               onClick={() => {

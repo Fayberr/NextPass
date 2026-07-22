@@ -62,19 +62,19 @@ export function Generator({ onBack: _onBack }: { onBack: () => void }) {
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mb-4 flex items-stretch gap-1.5">
-          <div className="flex flex-1 items-center break-all rounded-xl border border-white/10 bg-white/5 p-3 font-mono text-sm text-white/90">
+          <div className="flex flex-1 items-center break-all rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 p-3 font-mono text-sm text-white/90">
             {value || '…'}
           </div>
           <button
             onClick={() => regen()}
-            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 text-violet-soft hover:text-white"
+            className="shrink-0 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 px-3 text-violet-soft hover:text-white"
             title="Regenerate"
           >
             <RefreshCw size={16} />
           </button>
           <button
             onClick={copy}
-            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 text-white/60 hover:text-white"
+            className="shrink-0 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 px-3 text-white/60 hover:text-white"
             title="Copy"
           >
             {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}

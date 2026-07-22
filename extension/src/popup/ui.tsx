@@ -25,7 +25,7 @@ export function Button({
   const variants = {
     primary:
       'bg-gradient-to-br from-violet-glow to-indigo-500 text-white shadow-glass hover:brightness-110',
-    ghost: 'bg-white/5 text-violet-soft hover:bg-white/10 border border-white/10',
+    ghost: 'bg-white/5 text-violet-soft hover:bg-white/10 border border-[rgba(255,255,255,0.07)]',
     subtle: 'text-white/60 hover:text-white',
   } as const;
   return <button className={cx(base, variants[variant], className)} {...props} />;
@@ -37,7 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
       <input
         ref={ref}
         className={cx(
-          'w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white/90',
+          'w-full rounded-xl bg-white/5 border border-[rgba(255,255,255,0.07)] px-3 py-2 text-sm text-white/90',
           'placeholder:text-white/30 outline-none focus:border-violet-soft/60 focus:bg-white/[0.07]',
           className,
         )}
@@ -106,7 +106,7 @@ export const Textarea = forwardRef<
     <textarea
       ref={ref}
       className={cx(
-        'w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90',
+        'w-full resize-none rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 px-3 py-2 text-sm text-white/90',
         'placeholder:text-white/30 outline-none focus:border-violet-soft/60 focus:bg-white/[0.07]',
         className,
       )}
@@ -130,7 +130,7 @@ export function Collapsible({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
+    <div className="rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/[0.03]">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -231,7 +231,7 @@ export function Select<T extends string | number>({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cx(
-          'flex w-full items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-sm text-white/90',
+          'flex w-full items-center gap-2 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 px-3 py-2 text-left text-sm text-white/90',
           'outline-none transition focus:border-violet-soft/60 hover:bg-white/[0.07]',
           open && 'border-violet-soft/60',
         )}
@@ -247,7 +247,7 @@ export function Select<T extends string | number>({
         <div
           ref={menuRef}
           style={{ left: menu.left, top: menu.top, width: menu.width }}
-          className="fixed z-50 max-h-[220px] overflow-y-auto rounded-xl border border-white/10 bg-ink-700/95 p-1 shadow-glass backdrop-blur-xl"
+          className="fixed z-50 max-h-[220px] overflow-y-auto rounded-xl border border-[rgba(255,255,255,0.07)] bg-ink-700/95 p-1 shadow-glass backdrop-blur-xl"
         >
           {options.map((o) => {
             const active = o.value === value;

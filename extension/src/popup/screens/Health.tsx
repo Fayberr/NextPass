@@ -42,7 +42,7 @@ export function Health({ onBack, onSelect }: { onBack: () => void; onSelect: (id
         <p className="p-6 text-center text-xs text-white/30">Analyzing…</p>
       ) : (
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="mb-4 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-4 flex items-center gap-4 rounded-2xl border border-[rgba(255,255,255,0.07)] bg-white/5 p-4">
             <ShieldCheck size={32} className={scoreColor(report.score)} />
             <div>
               <div className={`text-3xl font-semibold tabular-nums ${scoreColor(report.score)}`}>

@@ -140,8 +140,14 @@ export function Trash(props: IconProps) {
 export function Wand(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="m15 4 1.5 1.5M3 21l9-9" />
-      <path d="M12.5 6.5 17 2m2 5 1.5 1.5M9 3l.7 1.8L11.5 5.5 9.7 6.2 9 8l-.7-1.8L6.5 5.5l1.8-.7z" />
+      <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z" />
+      <path d="m14 7 3 3" />
+      <path d="M5 6v4" />
+      <path d="M19 14v4" />
+      <path d="M10 2v2" />
+      <path d="M7 8H3" />
+      <path d="M21 16h-4" />
+      <path d="M11 3H9" />
     </Svg>
   );
 }

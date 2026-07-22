@@ -5,7 +5,7 @@
  * memory, iframe handling) is Phase 3 per the spec.
  */
 
-import type { AutofillMatch, AutofillIdentityMatch, Msg, MsgResult } from '../lib/messages.js';
+import type { AutofillMatch, AutofillIdentityMatch, AutofillCardMatch, Msg, MsgResult } from '../lib/messages.js';
 import { generatePassword, passwordStrength, type LoginFields } from '@pm/shared';
 
 const PW_SELECTOR = 'input[type="password"]';
@@ -125,6 +125,11 @@ async function identityQuery(): Promise<AutofillIdentityMatch[]> {
   return res?.ok && res.kind === 'identity_autofill' ? res.matches : [];
 }
 
+async function cardQuery(): Promise<AutofillCardMatch[]> {
+  const res = await sendMsg({ kind: 'autofill_card_query' });
+  return res?.ok && res.kind === 'card_autofill' ? res.matches : [];
+}
+
 /**
  * Whether there's an unlocked vault to autofill/generate against. Without this, a locked vault
  * looks identical to "no saved logins" (autofillQuery returns [] either way) — which used to make
@@ -188,6 +193,7 @@ function openLockPrompt(pw: HTMLInputElement, anchor: HTMLInputElement = pw): vo
   closeGen();
   closeLockPrompt();
   closeIdentityPicker();
+  closeCardPicker();
   const W = 300; // same card width as the generator
   const { left, top } = anchorCardNextTo(anchor, W);
   const host = document.createElement('div');
@@ -269,6 +275,7 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[], anchor: HTML
   closeGen();
   closeLockPrompt();
   closeIdentityPicker();
+  closeCardPicker();
   const W = 300; // same card width/anchor algorithm as the generator, so it appears in the same place
   const { left, top } = anchorCardNextTo(anchor, W);
   const host = document.createElement('div');
@@ -356,9 +363,10 @@ function badgeShouldShow(field: HTMLInputElement): boolean {
 /** Is `el` one of our own injected overlay hosts (badge / picker / generator / save-card)? */
 function isOurNode(el: Element): boolean {
   if (el === genHost || el === pickerHost || el === saveHost || el === lockHost) return true;
-  if (el === identityPickerHost) return true;
+  if (el === identityPickerHost || el === cardPickerHost) return true;
   for (const { host } of badges.values()) if (el === host) return true;
   for (const { host } of identityBadges.values()) if (el === host) return true;
+  for (const { host } of cardBadges.values()) if (el === host) return true;
   return false;
 }
 
@@ -544,7 +552,8 @@ function scanFields(): void {
     if (!present.has(field)) removeBadge(field);
   }
   refreshBadges(true); // DOM changed → re-measure insets (a site control may have appeared/moved)
-  scanIdentityFields();
+  const claimed = scanCardFields();
+  scanIdentityFields(claimed);
 }
 
 // --- identity autofill (name/address/phone-style checkout & registration fields) -----------------
@@ -682,8 +691,10 @@ function refreshIdentityBadges(recompute = false): void {
 
 /** Sweep visible text/email/tel inputs, grouped by form scope; only scopes with NO visible password
  *  field (i.e. not a login/register form) are eligible, and only scopes with at least one recognized
- *  field get badges — see the section comment above for why. */
-function scanIdentityFields(): void {
+ *  field get badges — see the section comment above for why. `claimed` is the set of fields already
+ *  taken by scanCardFields() (e.g. a "Name on Card" field), which must be skipped here so a single
+ *  input never gets both a card badge and an identity badge. */
+function scanIdentityFields(claimed: Set<HTMLInputElement> = new Set()): void {
   const present = new Set<HTMLInputElement>();
   const scopes = new Set<ParentNode>();
   for (const form of document.querySelectorAll('form')) scopes.add(form);
@@ -699,6 +710,7 @@ function scanIdentityFields(): void {
     for (const el of inputs) {
       // document-scope pass shouldn't re-claim fields that already belong to a real <form> scope.
       if (scope === document && el.closest('form')) continue;
+      if (claimed.has(el)) continue;
       const key = identityFieldKey(el);
       if (key && !scopeFields.has(key)) scopeFields.set(key, el);
     }
@@ -740,6 +752,7 @@ function openIdentityPicker(
   closePicker();
   closeGen();
   closeLockPrompt();
+  closeCardPicker();
   const W = 300;
   const { left, top } = anchorCardNextTo(field, W);
   const host = document.createElement('div');
@@ -799,6 +812,244 @@ function openIdentityPicker(
   });
 }
 
+// --- card autofill (checkout forms: card number/expiry/CVV/cardholder name) ----------------------
+//
+// Same shape as the identity system above: a form scope with no visible password field, grouped
+// recognized fields, badge-click opens a picker of saved cards, picking one fills every recognized
+// field in the scope at once. Card fields are classified BEFORE identity fields in scanFields() and
+// claimed fields are excluded from identity classification (see scanIdentityFields's `claimed`
+// param) — otherwise a "Name on Card" field could get misread as an identity first/last name field.
+
+type CardKey = 'cardholder' | 'number' | 'expMonth' | 'expYear' | 'expCombined' | 'cvv';
+
+const CARD_AC_MAP: Record<string, CardKey> = {
+  'cc-name': 'cardholder',
+  'cc-number': 'number',
+  'cc-exp-month': 'expMonth',
+  'cc-exp-year': 'expYear',
+  'cc-exp': 'expCombined',
+  'cc-csc': 'cvv',
+};
+
+// Order matters: expMonth/expYear must be checked before the generic "expir..." combined-field
+// pattern, since a label like "Expiry Month" contains both "exp" and "month".
+const CARD_NAME_HINTS: [RegExp, CardKey][] = [
+  [/exp.*month|month.*exp|ablaufmonat/i, 'expMonth'],
+  [/exp.*year|year.*exp|ablaufjahr/i, 'expYear'],
+  [/(mm\s*\/?\s*yy|expir|g.ltig|valid.?thru|ablauf)/i, 'expCombined'],
+  [/cvv|cvc|security.?code|card.?code|sicherheitscode|prüfziffer/i, 'cvv'],
+  [/card.?number|cc.?number|kartennummer|kreditkartennummer/i, 'number'],
+  [/card.?holder|name.*on.*card|karteninhaber/i, 'cardholder'],
+];
+
+function cardFieldKey(el: HTMLInputElement): CardKey | null {
+  const ac = (el.getAttribute('autocomplete') ?? '').toLowerCase().trim();
+  const lastTok = ac.split(/\s+/).pop() ?? '';
+  const mapped = CARD_AC_MAP[lastTok];
+  if (mapped) return mapped;
+  if (el.type !== 'text' && el.type !== 'tel' && el.type !== 'search') return null;
+  const hay = `${el.name} ${el.id} ${el.placeholder} ${el.getAttribute('aria-label') ?? ''}`;
+  for (const [re, key] of CARD_NAME_HINTS) if (re.test(hay)) return key;
+  return null;
+}
+
+interface CardBadge {
+  host: HTMLDivElement;
+  btn: HTMLButtonElement;
+  inset: number;
+  scopeFields: Map<CardKey, HTMLInputElement>;
+}
+const cardBadges = new Map<HTMLInputElement, CardBadge>();
+
+function ensureCardBadge(field: HTMLInputElement, scopeFields: Map<CardKey, HTMLInputElement>): void {
+  const existing = cardBadges.get(field);
+  if (existing) {
+    existing.scopeFields = scopeFields;
+    return;
+  }
+  const host = document.createElement('div');
+  host.style.cssText =
+    'position:fixed;z-index:2147483646;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+  const shadow = host.attachShadow({ mode: 'closed' });
+  shadow.innerHTML = `
+    <style>
+      .key{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;
+        border-radius:7px;cursor:pointer;background:rgba(109,92,224,.14);color:#8b78ea;transition:.15s}
+      .key:hover{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
+      .key.active{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
+    </style>
+    <button class="key" title="Fill from saved card" tabindex="-1" aria-label="Fill from saved card">${KEY_SVG}</button>`;
+  document.documentElement.appendChild(host);
+  const btn = shadow.querySelector<HTMLButtonElement>('.key')!;
+  const badge: CardBadge = { host, btn, inset: computeRightInset(field), scopeFields };
+  cardBadges.set(field, badge);
+  positionBadge(field, badge);
+  btn.addEventListener('mousedown', (e) => {
+    e.preventDefault(); // keep focus on the field
+    void (async () => {
+      if (!(await vaultReady())) {
+        if (lockHost && lockField === field) closeLockPrompt();
+        else openLockPrompt(field, field);
+        return;
+      }
+      if (cardPickerHost && cardPickerField === field) {
+        closeCardPicker();
+        return;
+      }
+      const matches = await cardQuery();
+      if (matches.length === 0) return; // nothing saved yet — no picker to show
+      openCardPicker(field, matches, badge.scopeFields);
+    })();
+  });
+}
+
+function removeCardBadge(field: HTMLInputElement): void {
+  const badge = cardBadges.get(field);
+  if (!badge) return;
+  badge.host.remove();
+  cardBadges.delete(field);
+}
+
+function refreshCardBadges(recompute = false): void {
+  for (const [field, badge] of cardBadges) {
+    if (recompute) badge.inset = computeRightInset(field);
+    positionBadge(field, badge);
+    badge.btn.classList.toggle('active', cardPickerHost !== null && cardPickerField === field);
+  }
+}
+
+/** Sweep visible text/tel inputs for card-shaped fields, grouped by form scope (same NO-visible-
+ *  password-field scoping rule as scanIdentityFields — a checkout form isn't a login form). Returns
+ *  the claimed fields so scanIdentityFields can skip them (a "Name on Card" field must not also get
+ *  an identity first/last-name badge). */
+function scanCardFields(): Set<HTMLInputElement> {
+  const present = new Set<HTMLInputElement>();
+  const scopes = new Set<ParentNode>();
+  for (const form of document.querySelectorAll('form')) scopes.add(form);
+  scopes.add(document); // form-less widgets too
+
+  for (const scope of scopes) {
+    const pwInScope = Array.from(scope.querySelectorAll<HTMLInputElement>(PW_SELECTOR)).some(isVisible);
+    if (pwInScope) continue;
+    const scopeFields = new Map<CardKey, HTMLInputElement>();
+    const inputs = Array.from(
+      scope.querySelectorAll<HTMLInputElement>('input:not([type="hidden"]):not([type="password"])'),
+    ).filter(isVisible);
+    for (const el of inputs) {
+      if (scope === document && el.closest('form')) continue;
+      const key = cardFieldKey(el);
+      if (key && !scopeFields.has(key)) scopeFields.set(key, el);
+    }
+    if (scopeFields.size === 0) continue;
+    for (const el of scopeFields.values()) {
+      present.add(el);
+      ensureCardBadge(el, scopeFields);
+    }
+  }
+  for (const field of [...cardBadges.keys()]) {
+    if (!present.has(field)) removeCardBadge(field);
+  }
+  refreshCardBadges(true);
+  return present;
+}
+
+let cardPickerHost: HTMLDivElement | null = null;
+let cardPickerField: HTMLInputElement | null = null;
+
+function closeCardPicker(): void {
+  cardPickerHost?.remove();
+  cardPickerHost = null;
+  cardPickerField = null;
+  refreshCardBadges();
+}
+
+/** Fills every recognized field in the scope, formatting a combined MM/YY field from the separate
+ *  stored expMonth/expYear when present. Never overwrites a field that already has a value. */
+function fillCardGroup(scopeFields: Map<CardKey, HTMLInputElement>, m: AutofillCardMatch): void {
+  for (const [key, el] of scopeFields) {
+    if (el.value) continue;
+    if (key === 'expCombined') {
+      if (m.expMonth && m.expYear) {
+        const mm = m.expMonth.padStart(2, '0');
+        const yy = m.expYear.length >= 2 ? m.expYear.slice(-2) : m.expYear;
+        setValue(el, `${mm}/${yy}`);
+      }
+      continue;
+    }
+    const value = m[key];
+    if (value) setValue(el, value);
+  }
+}
+
+function openCardPicker(
+  field: HTMLInputElement,
+  matches: AutofillCardMatch[],
+  scopeFields: Map<CardKey, HTMLInputElement>,
+): void {
+  closeCardPicker();
+  closeIdentityPicker();
+  closePicker();
+  closeGen();
+  closeLockPrompt();
+  const W = 300;
+  const { left, top } = anchorCardNextTo(field, W);
+  const host = document.createElement('div');
+  host.style.cssText = `position:fixed;left:${Math.round(left)}px;top:${Math.round(
+    top,
+  )}px;z-index:2147483647;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif`;
+  const shadow = host.attachShadow({ mode: 'closed' });
+  const rows = matches
+    .map(
+      (m, i) => `
+      <button class="row" data-i="${i}">
+        <span class="ic">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b9aef2" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        </span>
+        <span class="txt"><span class="nm">${esc(m.name)}</span>${
+          m.number ? `<span class="sub">•••• ${esc(m.number.slice(-4))}</span>` : ''
+        }</span>
+      </button>`,
+    )
+    .join('');
+  shadow.innerHTML = `
+    <style>
+      @keyframes pm-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+      .card{width:${W}px;background:#1a1622;color:#e9e7ef;border:1px solid rgba(109,92,224,.35);
+        border-radius:14px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.55),0 0 22px rgba(109,92,224,.22);
+        animation:pm-in .16s ease-out}
+      .hd{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:13px;font-weight:600}
+      .hd svg{color:#8b78ea}
+      .list{max-height:250px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+      .row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;
+        border-radius:9px;padding:8px;cursor:pointer;color:#e9e7ef}
+      .row:hover{background:rgba(109,92,224,.18)}
+      .ic{flex:none;display:flex}
+      .txt{min-width:0;display:flex;flex-direction:column}
+      .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .sub{font-size:11px;color:rgba(233,231,239,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    </style>
+    <div class="card" role="dialog" aria-label="Password Manager cards">
+      <div class="hd">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Fill from saved card
+      </div>
+      <div class="list">${rows}</div>
+    </div>`;
+  document.documentElement.appendChild(host);
+  cardPickerHost = host;
+  cardPickerField = field;
+  refreshCardBadges();
+  shadow.querySelectorAll<HTMLButtonElement>('.row').forEach((btn) => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      fillCardGroup(scopeFields, matches[Number(btn.dataset.i)]!);
+      closeCardPicker();
+    });
+  });
+}
+
 let genHost: HTMLDivElement | null = null;
 let genField: HTMLInputElement | null = null;
 // The field the generator card is visually anchored to — normally genField itself, but when opened
@@ -840,6 +1091,7 @@ function openGenerator(pw: HTMLInputElement, anchor: HTMLInputElement = pw): voi
   closeLockPrompt();
   closeGen();
   closeIdentityPicker();
+  closeCardPicker();
   genField = pw;
   genAnchor = anchor;
   const host = document.createElement('div');
@@ -1218,6 +1470,7 @@ function attach(): void {
       setTimeout(() => {
         closePicker();
         closeIdentityPicker();
+        closeCardPicker();
         // The generator card is sticky (closed only via the badge / Escape / Use), so we never tear
         // it down on blur. Badges are persistent and are NOT removed on blur either.
       }, 150),
@@ -1229,6 +1482,7 @@ function attach(): void {
       if (e.key === 'Escape') {
         closePicker();
         closeIdentityPicker();
+        closeCardPicker();
         if (genField) noAutoOpen.add(genField);
         closeGen();
         if (lockField) noAutoOpen.add(lockField);
@@ -1259,9 +1513,11 @@ function attach(): void {
     () => {
       refreshBadges(false); // scroll: field + its controls move together, cached inset still valid
       refreshIdentityBadges(false);
+      refreshCardBadges(false);
       positionGen();
       closePicker();
       closeIdentityPicker();
+      closeCardPicker();
       closeLockPrompt(); // not repositioned live like the generator — just drop it, same as the picker
     },
     true,
@@ -1271,9 +1527,11 @@ function attach(): void {
     () => {
       refreshBadges(true); // resize can reflow the field's controls → re-measure the inset
       refreshIdentityBadges(true);
+      refreshCardBadges(true);
       positionGen();
       closePicker();
       closeIdentityPicker();
+      closeCardPicker();
       closeLockPrompt();
     },
     true,

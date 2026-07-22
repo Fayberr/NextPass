@@ -70,6 +70,7 @@ export type Msg =
   | { kind: 'sync' }
   | { kind: 'autofill_query'; url: string }
   | { kind: 'autofill_identity_query' }
+  | { kind: 'autofill_card_query' }
   | { kind: 'passkey_create'; req: PasskeyCreateReq }
   | { kind: 'passkey_get'; req: PasskeyGetReq }
   | { kind: 'open_unlock_ui' };
@@ -81,6 +82,7 @@ export type MsgResult =
   | { ok: true; kind: 'sync'; pulled: number }
   | { ok: true; kind: 'autofill'; matches: AutofillMatch[] }
   | { ok: true; kind: 'identity_autofill'; matches: AutofillIdentityMatch[] }
+  | { ok: true; kind: 'card_autofill'; matches: AutofillCardMatch[] }
   | { ok: true; kind: 'audit'; report: AuditReport }
   | { ok: true; kind: 'settings'; settings: Settings }
   | { ok: true; kind: 'passkey_created'; res: PasskeyCreateRes }
@@ -177,4 +179,16 @@ export interface AutofillIdentityMatch {
   state: string | null;
   postalCode: string | null;
   country: string | null;
+}
+
+/** A saved bank card, decrypted, offered to the content script's card-field autofill (checkout
+ *  forms). No URL/matchMode filtering, same as identities — every saved card is always offered. */
+export interface AutofillCardMatch {
+  id: string;
+  name: string;
+  cardholder: string | null;
+  number: string | null;
+  expMonth: string | null;
+  expYear: string | null;
+  cvv: string | null;
 }

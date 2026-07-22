@@ -41,6 +41,7 @@ import { cacheClear, cacheDelete, cacheGetAll, cacheUpsert } from './storage.js'
 import type {
   AutofillMatch,
   AutofillIdentityMatch,
+  AutofillCardMatch,
   ItemSummary,
   PasskeyCreateReq,
   PasskeyCreateRes,
@@ -701,6 +702,29 @@ export class SessionManager {
         state: f.state ?? null,
         postalCode: f.postalCode ?? null,
         country: f.country ?? null,
+      });
+    }
+    return matches;
+  }
+
+  /** All saved bank cards, decrypted. No URL/matchMode filtering — same rationale as identityQuery(). */
+  async cardQuery(): Promise<AutofillCardMatch[]> {
+    await this.hydrate();
+    if (!this.vaultKey) return [];
+    const records = await cacheGetAll();
+    const matches: AutofillCardMatch[] = [];
+    for (const r of records) {
+      if (r.deletedAt || r.type !== 'card') continue;
+      const { fields } = await this.decryptRecord(r);
+      const f = fields as unknown as CardFields;
+      matches.push({
+        id: r.id,
+        name: f.name ?? '(no name)',
+        cardholder: f.cardholder ?? null,
+        number: f.number ?? null,
+        expMonth: f.expMonth ?? null,
+        expYear: f.expYear ?? null,
+        cvv: f.cvv ?? null,
       });
     }
     return matches;

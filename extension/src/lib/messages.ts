@@ -79,9 +79,11 @@ export type Msg =
   | { kind: 'autofill_card_query' }
   | { kind: 'passkey_create'; req: PasskeyCreateReq }
   | { kind: 'passkey_get'; req: PasskeyGetReq }
+  | { kind: 'google_auth'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
   | { kind: 'open_unlock_ui' };
 
 export type MsgResult =
+  | { ok: true; kind: 'google_auth_result'; res: import('@pm/shared').GoogleAuthResponse }
   | { ok: true; kind: 'state'; state: VaultState; recovery?: string }
   | { ok: true; kind: 'items'; items: ItemSummary[] }
   | { ok: true; kind: 'item'; id: string; type: string; fields: unknown; favorite: boolean }

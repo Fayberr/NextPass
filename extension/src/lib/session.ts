@@ -145,7 +145,13 @@ export class SessionManager {
     return new ApiClient(acct.serverUrl, acct.deviceToken);
   }
 
-  // --- account lifecycle ---
+  async googleAuth(
+    serverUrl: string,
+    googleUser: { googleId: string; email: string; name?: string; picture?: string },
+  ): Promise<GoogleAuthResponse> {
+    const api = new ApiClient(serverUrl);
+    return await api.googleAuth(googleUser);
+  }
 
   /** Register a brand-new account on the server. Returns the one-time recovery phrase. */
   async register(serverUrl: string, identifier: string, password: string): Promise<string> {

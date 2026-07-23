@@ -93,6 +93,11 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.ackRecovery();
         return { ok: true, kind: 'state', state: await session.getState() };
 
+      case 'google_auth': {
+        const res = await session.googleAuth(msg.serverUrl, msg.googleUser);
+        return { ok: true, kind: 'google_auth_result', res };
+      }
+
       case 'list_items':
         return { ok: true, kind: 'items', items: await session.listItems() };
 

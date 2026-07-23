@@ -4,6 +4,7 @@ import { ShieldCheck, AlertTriangle } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SERVER_URL } from '../../lib/config.js';
 import type { VaultState } from '../../lib/messages.js';
+import { promptGoogleAuth } from '../../lib/google-auth.js';
 
 /**
  * The unlock/onboarding hero screen. Modes: unlock (account exists, vault locked) |
@@ -79,6 +80,38 @@ export function Unlock({
         // recovery screen because res.state.pendingRecovery is set.)
         await chrome.storage.session.remove(DRAFT_KEY);
         onUnlocked(res.state);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogleAuth() {
+    setBusy(true);
+    setError(null);
+    try {
+      const googleUser = await promptGoogleAuth();
+      if (!googleUser) {
+        setBusy(false);
+        return;
+      }
+      const res = await send({
+        kind: 'google_auth',
+        serverUrl,
+        googleUser,
+      });
+
+      if (!res.ok) throw new Error(res.error);
+      if (res.kind === 'google_auth_result') {
+        const info = res.res;
+        if (info.identifier) setIdentifier(info.identifier);
+        if (info.existingUser) {
+          setMode('login');
+        } else {
+          setMode('register');
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -199,6 +232,42 @@ export function Unlock({
           </form>
         ) : (
           <>
+            {!configured && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={busy}
+                  className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
+                >
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#EA4335"
+                      d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.1 9 5 12 5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.4 0 15.3c0 2.9.7 5.6 1.9 8l3.7-2.9z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.1-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z"
+                    />
+                  </svg>
+                  <span>Sign in with Google</span>
+                </button>
+                <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span>OR</span>
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+              </>
+            )}
+
             {!configured && (
               <div className="mb-3 flex rounded-full bg-white/5 p-1 text-xs">
                 {(['login', 'register'] as const).map((m) => (

@@ -7,6 +7,8 @@ import type { KdfParams } from './crypto.js';
 import type {
   AuthResponse,
   DeviceInfo,
+  GoogleAuthRequest,
+  GoogleAuthResponse,
   ItemRecord,
   ItemUpsert,
   LoginPayload,
@@ -75,6 +77,9 @@ export class ApiClient {
   }
   register(payload: RegistrationPayload): Promise<AuthResponse> {
     return this.req('POST', '/api/register', payload);
+  }
+  googleAuth(payload: GoogleAuthRequest): Promise<GoogleAuthResponse> {
+    return this.req('POST', '/api/auth/google', payload);
   }
   prelogin(identifier: string): Promise<PreloginResponse> {
     return this.req('POST', '/api/prelogin', { identifier });

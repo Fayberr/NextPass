@@ -13,6 +13,14 @@ export function openDb(dbPath: string): DB {
   db.pragma('foreign_keys = ON');
   const migration = readFileSync(resolve(__dirname, 'migrations/001_init.sql'), 'utf8');
   db.exec(migration);
+
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN google_id TEXT');
+  } catch {}
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN google_email TEXT');
+  } catch {}
+
   return db;
 }
 

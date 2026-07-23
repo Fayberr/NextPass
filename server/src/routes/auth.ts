@@ -25,6 +25,14 @@ const registerSchema = z.object({
   device: z.object({ platform: z.string().min(1).max(64) }),
 });
 
+const googleAuthSchema = z.object({
+  googleId: z.string().min(1),
+  email: z.string().min(1).max(320),
+  name: z.string().optional(),
+  picture: z.string().optional(),
+  idToken: z.string().optional(),
+});
+
 const preloginSchema = z.object({ identifier: z.string().min(1).max(320) });
 
 const loginSchema = z.object({
@@ -37,6 +45,8 @@ const b64 = (s: string) => Buffer.from(s, 'base64');
 
 export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Promise<void> {
   const findUser = db.prepare('SELECT * FROM users WHERE identifier = ?');
+  const findUserByGoogleId = db.prepare('SELECT * FROM users WHERE google_id = ?');
+  const linkUserGoogle = db.prepare('UPDATE users SET google_id = ?, google_email = ? WHERE id = ?');
 
   const insertUser = db.prepare(
     `INSERT INTO users (id, identifier, is_admin, master_pw_salt, kdf_params, auth_key_hash, created_at, updated_at)
@@ -60,6 +70,51 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
   }
 
   // --- POST /api/register --------------------------------------------------
+  app.post('/api/auth/google', async (request, reply) => {
+    const parsed = googleAuthSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const { googleId, email, name, picture } = parsed.data;
+    const lowerEmail = email.trim().toLowerCase();
+
+    let user = findUserByGoogleId.get(googleId) as
+      | { id: string; identifier: string; master_pw_salt: Buffer; kdf_params: string }
+      | undefined;
+
+    if (!user) {
+      const match = findUser.get(lowerEmail) as
+        | { id: string; identifier: string; master_pw_salt: Buffer; kdf_params: string }
+        | undefined;
+      if (match) {
+        linkUserGoogle.run(googleId, lowerEmail, match.id);
+        user = match;
+      }
+    }
+
+    if (user) {
+      return reply.send({
+        googleId,
+        email: lowerEmail,
+        name,
+        picture,
+        existingUser: true,
+        identifier: user.identifier,
+        prelogin: {
+          masterPwSalt: user.master_pw_salt.toString('base64'),
+          kdfParams: JSON.parse(user.kdf_params),
+        },
+      });
+    }
+
+    return reply.send({
+      googleId,
+      email: lowerEmail,
+      name,
+      picture,
+      existingUser: false,
+      identifier: lowerEmail,
+    });
+  });
+
   app.post('/api/register', async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });

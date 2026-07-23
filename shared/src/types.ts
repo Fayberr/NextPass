@@ -48,6 +48,25 @@ export interface PreloginResponse {
   kdfParams: KdfParams;
 }
 
+export interface GoogleAuthRequest {
+  googleId: string;
+  email: string;
+  name?: string;
+  picture?: string;
+  idToken?: string;
+}
+
+export interface GoogleAuthResponse {
+  googleId: string;
+  email: string;
+  name?: string;
+  picture?: string;
+  existingUser: boolean;
+  identifier?: string;
+  prelogin?: PreloginResponse;
+  auth?: AuthResponse;
+}
+
 export interface LoginPayload {
   identifier: string;
   authKeyHash: B64;

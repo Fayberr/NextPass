@@ -51,7 +51,7 @@ export default defineManifest({
   content_security_policy: {
     extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
   },
-  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'alarms', 'webAuthenticationProxy', 'favicon'],
+  permissions: ['storage', 'activeTab', 'scripting', 'tabs', 'alarms', 'webAuthenticationProxy', 'favicon', 'identity'],
   host_permissions: [
     'https://password-manager.fayber.dev/*',
     'http://192.168.178.2:8787/*',

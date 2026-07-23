@@ -21,6 +21,18 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   const auth = requireAuth(db);
 
+  // Allow CORS from all origins (including localhost dev servers and extension origins)
+  app.addHook('onRequest', async (req, reply) => {
+    const origin = req.headers.origin;
+    reply.header('Access-Control-Allow-Origin', origin || '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Device-Token, x-device-token');
+    reply.header('Access-Control-Allow-Credentials', 'true');
+    if (req.method === 'OPTIONS') {
+      return reply.status(204).send();
+    }
+  });
+
   app.get('/api/health', async () => ({ status: 'ok', service: 'password-manager', phase: 0 }));
 
   // Public (identity establishment)

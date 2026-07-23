@@ -19,7 +19,7 @@ The server only ever stores ciphertext and wrapped keys. No unencrypted credenti
 - **Master-Password KDF:** Argon2id (m=64MB, t=3, p=1) → `masterKey` → HKDF-split into `encKey` + `authKey`.
 - **Vault Key (AES-256):** Wrapped 3 ways:
   - `wrapped_key_by_master_pw`: Master Password unwrap
-  - `wrapped_key_by_admin`: Optional admin unwrap (backed by RSA-4096 keypair)
+  - `wrapped_key_by_admin`: Administrative key unwrap
   - `wrapped_key_by_recovery`: 12-word BIP39 mnemonic unwrap
 - **Per-Item Keys (AES-256):** Each item is encrypted with its own item key, wrapped under the Vault Key.
 - **Symmetric Encryption:** AES-256-GCM (`IV ‖ Ciphertext ‖ Tag`).

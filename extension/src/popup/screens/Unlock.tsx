@@ -36,7 +36,7 @@ export function Unlock({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [googleAuthAccount, setGoogleAuthAccount] = useState<{ email: string; existingUser: boolean } | null>(null);
   const [pendingGoogleLink, setPendingGoogleLink] = useState<{ googleId: string; googleEmail: string } | null>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const loaded = useRef(false);
@@ -103,12 +103,9 @@ export function Unlock({
   async function handleGoogleAuth() {
     setBusy(true);
     setError(null);
-    setInfoMessage(null);
     try {
       // Runs the interactive account chooser in the background service worker (not here in the
-      // popup) - see the 'google_signin' case in background/index.ts for why: the chooser window
-      // stealing focus would otherwise auto-close this popup mid-flight and silently drop
-      // everything after it, with no error surfaced anywhere.
+      // popup) - see the 'google_signin' case in background/index.ts for why.
       const gRes = await send({ kind: 'google_signin' });
       if (!gRes.ok) throw new Error(gRes.error);
       const googleUser = gRes.kind === 'google_user' ? gRes.googleUser : null;
@@ -130,7 +127,7 @@ export function Unlock({
       }
 
       // Fallback (device-unlock not enabled/available): Google identifies & verifies the account,
-      // then prompts for the master password to unlock/decrypt.
+      // then prompts for the master password on a dedicated focused password screen.
       const res = await send({
         kind: 'google_auth',
         serverUrl,
@@ -140,6 +137,7 @@ export function Unlock({
       if (!res.ok) throw new Error(res.error);
       if (res.kind === 'google_auth_result') {
         const info = res.res;
+        const idToShow = info.identifier || googleUser.email;
         if (info.identifier) setIdentifier(info.identifier);
 
         setPendingGoogleLink({
@@ -147,20 +145,16 @@ export function Unlock({
           googleEmail: googleUser.email,
         });
 
-        const idToShow = info.identifier || googleUser.email;
         if (info.existingUser) {
           setMode('login');
-          setInfoMessage(
-            `Google account authenticated (${idToShow}). Enter your master password to ${
-              configured && idToShow.toLowerCase() === (state.identifier ?? '').toLowerCase() ? 'unlock' : 'log in'
-            }.`,
-          );
         } else {
           setMode('register');
-          setInfoMessage(
-            `Google account (${idToShow}) verified. Choose a master password to create your vault.`,
-          );
         }
+
+        setGoogleAuthAccount({
+          email: idToShow,
+          existingUser: info.existingUser,
+        });
 
         setTimeout(() => passwordInputRef.current?.focus(), 50);
       }
@@ -224,6 +218,8 @@ export function Unlock({
         <p className="mt-1 text-xs text-white/40">
           {showRecoveryMode
             ? 'Vault Recovery - 12-Word Phrase'
+            : googleAuthAccount
+            ? 'Enter master password to continue'
             : configured
             ? 'Enter your master password to unlock'
             : 'The next Generation Password Manager'}
@@ -281,6 +277,55 @@ export function Unlock({
               Cancel & return to unlock
             </button>
           </form>
+        ) : googleAuthAccount ? (
+          <div className="space-y-3">
+            <div className="mb-2 text-xs text-white/40">
+              Logging into account <span className="font-medium text-white/70">{googleAuthAccount.email}</span>
+            </div>
+
+            <Field label="Master password">
+              <Input
+                ref={passwordInputRef}
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
+                autoFocus
+                autoComplete="current-password"
+              />
+            </Field>
+
+            {error && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300">
+                <AlertTriangle size={14} className="shrink-0 text-rose-400" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <Button className="w-full" onClick={submit} disabled={busy || !password}>
+              {busy
+                ? 'Working…'
+                : configured && (!identifier || identifier.toLowerCase() === (state.identifier ?? '').toLowerCase())
+                ? 'Unlock'
+                : googleAuthAccount.existingUser
+                ? 'Log in'
+                : 'Create vault'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setGoogleAuthAccount(null);
+                setError(null);
+              }}
+              className="mt-3 block w-full text-center text-xs text-white/30 hover:text-white/60"
+            >
+              Use a different account
+            </button>
+          </div>
         ) : (
           <>
             <button
@@ -338,6 +383,12 @@ export function Unlock({
               </>
             )}
 
+            {configured && (state.identifier || state.googleEmail) && (
+              <div className="mb-2 text-xs text-white/40">
+                Logging into account <span className="font-medium text-white/70">{state.googleEmail || state.identifier}</span>
+              </div>
+            )}
+
             <Field label="Master password">
               <Input
                 ref={passwordInputRef}
@@ -352,13 +403,6 @@ export function Unlock({
                 autoComplete="current-password"
               />
             </Field>
-
-            {infoMessage && (
-              <div className="mb-3 flex items-center gap-2 rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-200">
-                <ShieldCheck size={14} className="shrink-0 text-violet-400" />
-                <span>{infoMessage}</span>
-              </div>
-            )}
 
             {error && (
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300">

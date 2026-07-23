@@ -62,7 +62,7 @@ a.on("open-external", (n, o) => {
   o && (o.startsWith("http://") || o.startsWith("https://")) && U.openExternal(o);
 });
 a.handle("google-oauth", async () => new Promise((n) => {
-  const p = `https://accounts.google.com/o/oauth2/v2/auth?client_id=103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com&response_type=id_token%20token&redirect_uri=${encodeURIComponent("https://password-manager.fayber.dev/oauth/callback")}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`, s = new m({
+  const p = `https://accounts.google.com/o/oauth2/v2/auth?client_id=103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com&response_type=id_token%20token&redirect_uri=${encodeURIComponent("http://localhost")}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`, s = new m({
     width: 500,
     height: 620,
     show: !0,

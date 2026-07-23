@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from './icons.js';
 
 function cx(...parts: (string | false | undefined)[]): string {
@@ -243,37 +244,39 @@ export function Select<T extends string | number>({
         />
       </button>
 
-      {open && (
-        <div
-          ref={menuRef}
-          style={{ left: menu.left, top: menu.top, width: menu.width }}
-          className="fixed z-50 max-h-[220px] overflow-y-auto rounded-xl border border-[rgba(255,255,255,0.07)] bg-ink-700/95 p-1 shadow-glass backdrop-blur-xl"
-        >
-          {options.map((o) => {
-            const active = o.value === value;
-            return (
-              <button
-                key={String(o.value)}
-                type="button"
-                onClick={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                }}
-                className={cx(
-                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition',
-                  active ? 'bg-violet-glow/20 text-white' : 'text-white/80 hover:bg-white/10',
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate">{o.label}</div>
-                  {o.hint && <div className="truncate text-[11px] text-white/40">{o.hint}</div>}
-                </div>
-                {active && <Check size={15} className="shrink-0 text-violet-soft" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{ left: menu.left, top: menu.top, width: menu.width }}
+            className="fixed z-[9999] max-h-[220px] overflow-y-auto rounded-xl border border-white/10 bg-[#16141f] p-1 shadow-2xl backdrop-blur-2xl"
+          >
+            {options.map((o) => {
+              const active = o.value === value;
+              return (
+                <button
+                  key={String(o.value)}
+                  type="button"
+                  onClick={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                  }}
+                  className={cx(
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition',
+                    active ? 'bg-violet-glow/20 text-white font-medium' : 'text-white/80 hover:bg-white/10',
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{o.label}</div>
+                    {o.hint && <div className="truncate text-[11px] text-white/40">{o.hint}</div>}
+                  </div>
+                  {active && <Check size={15} className="shrink-0 text-violet-soft" />}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

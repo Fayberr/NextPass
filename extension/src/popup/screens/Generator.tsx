@@ -15,7 +15,11 @@ export function Generator({ onBack: _onBack }: { onBack: () => void }) {
   const [saved, setSaved] = useState(false);
 
   function patch(p: Partial<GeneratorDefaults>) {
-    setG((prev) => ({ ...prev, ...p }));
+    setG((prev) => {
+      const next = { ...prev, ...p };
+      regen(next);
+      return next;
+    });
   }
 
   function regen(cur = g) {

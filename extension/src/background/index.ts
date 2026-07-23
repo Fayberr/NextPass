@@ -169,6 +169,35 @@ async function handle(msg: Msg): Promise<MsgResult> {
         return { ok: true, kind: 'settings', settings };
       }
 
+      case 'change_master_password':
+        await session.changeMasterPassword(msg.currentPassword, msg.newPassword);
+        return { ok: true, kind: 'void' };
+
+      case 'download_recovery': {
+        const { data, filename } = await session.downloadRecoveryPhrase();
+        return { ok: true, kind: 'export', data, filename };
+      }
+
+      case 'recover_account': {
+        const state = await session.recoverAccount(msg.mnemonic, msg.newPassword);
+        return { ok: true, kind: 'state', state };
+      }
+
+      case 'export_vault': {
+        const { data, filename } = await session.exportVault(msg.format);
+        return { ok: true, kind: 'export', data, filename };
+      }
+
+      case 'import_backup': {
+        const res = await session.importBackup(msg.jsonText, msg.password);
+        return { ok: true, kind: 'import_result', ...res };
+      }
+
+      case 'purge_vault': {
+        const { backupData, backupFilename } = await session.purgeVault(msg.masterPassword, msg.downloadBackup);
+        return { ok: true, kind: 'purge_result', backupData, backupFilename };
+      }
+
       case 'sync':
         return { ok: true, kind: 'sync', pulled: await session.sync() };
 

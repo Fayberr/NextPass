@@ -3,6 +3,7 @@
  * blobs (built with `register.ts` / `vault.ts`). Works in the browser and in Node (global fetch).
  */
 
+import type { KdfParams } from './crypto.js';
 import type {
   AuthResponse,
   DeviceInfo,
@@ -81,6 +82,18 @@ export class ApiClient {
   login(payload: LoginPayload): Promise<AuthResponse> {
     return this.req('POST', '/api/login', payload);
   }
+  changePassword(payload: {
+    masterPwSalt: string;
+    kdfParams: KdfParams;
+    authKeyHash: string;
+    wrappedKeyByMasterPw: string;
+  }): Promise<{ ok: boolean }> {
+    return this.req('POST', '/api/user/change-password', payload);
+  }
+
+  updateRecovery(payload: { wrappedKeyByRecovery: string }): Promise<{ ok: boolean }> {
+    return this.req('POST', '/api/user/update-recovery', payload);
+  }
 
   // --- vault + items ---
   getVault(): Promise<{ vaultId: string; wrappedKeyByMasterPw: string; wrappedKeyByRecovery: string }> {
@@ -100,6 +113,9 @@ export class ApiClient {
   }
   deleteItem(id: string): Promise<void> {
     return this.req('DELETE', `/api/items/${id}`);
+  }
+  purgeItems(): Promise<{ ok: boolean }> {
+    return this.req('DELETE', '/api/items/purge');
   }
 
   // --- sync ---

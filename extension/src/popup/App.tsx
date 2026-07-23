@@ -57,6 +57,18 @@ const ADD_VIEW: Partial<Record<Category, View>> = {
   note: { name: 'add_note' },
 };
 
+const POPUP_STATE_KEY = 'pm_popup_active_state';
+
+function savePopupState(v: View, c: Category) {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      void chrome.storage.local.set({ [POPUP_STATE_KEY]: { view: v, category: c } });
+    } else {
+      localStorage.setItem(POPUP_STATE_KEY, JSON.stringify({ view: v, category: c }));
+    }
+  } catch {}
+}
+
 export function App() {
   const [state, setState] = useState<VaultState | null>(null);
   const [view, setView] = useState<View>({ name: 'list' });
@@ -65,6 +77,16 @@ export function App() {
   const [syncing, setSyncing] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
+  function updateView(newView: View, newCat: Category = category) {
+    setView(newView);
+    savePopupState(newView, newCat);
+  }
+
+  function updateCategory(newCat: Category) {
+    setCategory(newCat);
+    updateView({ name: 'list' }, newCat);
+  }
+
   async function refresh() {
     const res = await send({ kind: 'get_state' });
     if (res.ok && res.kind === 'state') setState(res.state);
@@ -72,6 +94,22 @@ export function App() {
 
   useEffect(() => {
     void refresh();
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get([POPUP_STATE_KEY], (res) => {
+        const saved = res?.[POPUP_STATE_KEY];
+        if (saved?.category) setCategory(saved.category);
+        if (saved?.view) setView(saved.view);
+      });
+    } else {
+      try {
+        const raw = localStorage.getItem(POPUP_STATE_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved?.category) setCategory(saved.category);
+          if (saved?.view) setView(saved.view);
+        }
+      } catch {}
+    }
   }, []);
 
   if (!state) {
@@ -85,13 +123,13 @@ export function App() {
       <Recovery
         phrase={state.pendingRecovery}
         identifier={state.identifier}
-        onAcked={() => { void refresh(); setView({ name: 'list' }); }}
+        onAcked={() => { void refresh(); updateView({ name: 'list' }); }}
       />
     );
   }
 
   if (!state.unlocked) {
-    return <Unlock state={state} onUnlocked={(s) => { setState(s); setView({ name: 'list' }); }} />;
+    return <Unlock state={state} onUnlocked={(s) => { setState(s); }} />;
   }
 
   async function doSync() {
@@ -106,55 +144,50 @@ export function App() {
     await refresh();
   }
 
-  function selectCategory(c: Category) {
-    setCategory(c);
-    setView({ name: 'list' });
-  }
-
   let content: ReactNode;
   switch (view.name) {
     case 'detail':
       content = (
         <ItemDetail
           id={view.id}
-          onBack={() => setView({ name: 'list' })}
+          onBack={() => updateView({ name: 'list' })}
           onEdit={(id, type, fields) => {
             switch (type) {
               case 'totp':
-                setView({ name: 'edit_totp', id, initial: fields as unknown as TotpFields });
+                updateView({ name: 'edit_totp', id, initial: fields as unknown as TotpFields });
                 break;
               case 'secret':
-                setView({ name: 'edit_secret', id, initial: fields as unknown as SecretFields });
+                updateView({ name: 'edit_secret', id, initial: fields as unknown as SecretFields });
                 break;
               case 'autofill_identity':
-                setView({
+                updateView({
                   name: 'edit_identity',
                   id,
                   initial: fields as unknown as AutofillIdentityFields,
                 });
                 break;
               case 'card':
-                setView({ name: 'edit_card', id, initial: fields as unknown as CardFields });
+                updateView({ name: 'edit_card', id, initial: fields as unknown as CardFields });
                 break;
               case 'note':
-                setView({ name: 'edit_note', id, initial: fields as unknown as NoteFields });
+                updateView({ name: 'edit_note', id, initial: fields as unknown as NoteFields });
                 break;
               default:
-                setView({ name: 'edit', id, initial: fields });
+                updateView({ name: 'edit', id, initial: fields });
             }
           }}
-          onDeleted={() => setView({ name: 'list' })}
+          onDeleted={() => updateView({ name: 'list' })}
         />
       );
       break;
     case 'add':
       content = (
-        <AddLogin onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+        <AddLogin onDone={() => updateView({ name: 'list' })} onCancel={() => updateView({ name: 'list' })} />
       );
       break;
     case 'add_totp':
       content = (
-        <AddTotp onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+        <AddTotp onDone={() => updateView({ name: 'list' })} onCancel={() => updateView({ name: 'list' })} />
       );
       break;
     case 'edit_totp':
@@ -162,14 +195,14 @@ export function App() {
         <AddTotp
           editId={view.id}
           initial={view.initial}
-          onDone={() => setView({ name: 'detail', id: view.id })}
-          onCancel={() => setView({ name: 'detail', id: view.id })}
+          onDone={() => updateView({ name: 'detail', id: view.id })}
+          onCancel={() => updateView({ name: 'detail', id: view.id })}
         />
       );
       break;
     case 'add_secret':
       content = (
-        <AddSecret onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+        <AddSecret onDone={() => updateView({ name: 'list' })} onCancel={() => updateView({ name: 'list' })} />
       );
       break;
     case 'edit_secret':
@@ -177,14 +210,14 @@ export function App() {
         <AddSecret
           editId={view.id}
           initial={view.initial}
-          onDone={() => setView({ name: 'detail', id: view.id })}
-          onCancel={() => setView({ name: 'detail', id: view.id })}
+          onDone={() => updateView({ name: 'detail', id: view.id })}
+          onCancel={() => updateView({ name: 'detail', id: view.id })}
         />
       );
       break;
     case 'add_identity':
       content = (
-        <AddIdentity onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+        <AddIdentity onDone={() => updateView({ name: 'list' })} onCancel={() => updateView({ name: 'list' })} />
       );
       break;
     case 'edit_identity':
@@ -192,14 +225,14 @@ export function App() {
         <AddIdentity
           editId={view.id}
           initial={view.initial}
-          onDone={() => setView({ name: 'detail', id: view.id })}
-          onCancel={() => setView({ name: 'detail', id: view.id })}
+          onDone={() => updateView({ name: 'detail', id: view.id })}
+          onCancel={() => updateView({ name: 'detail', id: view.id })}
         />
       );
       break;
     case 'add_card':
       content = (
-        <AddCard onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+        <AddCard onDone={() => updateView({ name: 'list' })} onCancel={() => updateView({ name: 'list' })} />
       );
       break;
     case 'edit_card':
@@ -207,14 +240,14 @@ export function App() {
         <AddCard
           editId={view.id}
           initial={view.initial}
-          onDone={() => setView({ name: 'detail', id: view.id })}
-          onCancel={() => setView({ name: 'detail', id: view.id })}
+          onDone={() => updateView({ name: 'detail', id: view.id })}
+          onCancel={() => updateView({ name: 'detail', id: view.id })}
         />
       );
       break;
     case 'add_note':
       content = (
-        <AddNote onDone={() => setView({ name: 'list' })} onCancel={() => setView({ name: 'list' })} />
+        <AddNote onDone={() => updateView({ name: 'list' })} onCancel={() => updateView({ name: 'list' })} />
       );
       break;
     case 'edit_note':
@@ -222,33 +255,33 @@ export function App() {
         <AddNote
           editId={view.id}
           initial={view.initial}
-          onDone={() => setView({ name: 'detail', id: view.id })}
-          onCancel={() => setView({ name: 'detail', id: view.id })}
+          onDone={() => updateView({ name: 'detail', id: view.id })}
+          onCancel={() => updateView({ name: 'detail', id: view.id })}
         />
       );
       break;
     case 'generator':
-      content = <Generator onBack={() => setView({ name: 'list' })} />;
+      content = <Generator onBack={() => updateView({ name: 'list' })} />;
       break;
     case 'health':
       content = (
         <Health
-          onBack={() => setView({ name: 'list' })}
-          onSelect={(id) => setView({ name: 'detail', id })}
+          onBack={() => updateView({ name: 'list' })}
+          onSelect={(id) => updateView({ name: 'detail', id })}
         />
       );
       break;
     case 'settings':
-      content = <Settings onBack={() => setView({ name: 'list' })} />;
+      content = <Settings onBack={() => updateView({ name: 'list' })} />;
       break;
     case 'import':
       content = (
         <Import
           onDone={() => {
-            setView({ name: 'list' });
+            updateView({ name: 'list' });
             setReloadTick((t) => t + 1);
           }}
-          onCancel={() => setView({ name: 'list' })}
+          onCancel={() => updateView({ name: 'list' })}
         />
       );
       break;
@@ -257,8 +290,8 @@ export function App() {
         <AddLogin
           editId={view.id}
           initial={view.initial}
-          onDone={() => setView({ name: 'detail', id: view.id })}
-          onCancel={() => setView({ name: 'detail', id: view.id })}
+          onDone={() => updateView({ name: 'detail', id: view.id })}
+          onCancel={() => updateView({ name: 'detail', id: view.id })}
         />
       );
       break;
@@ -268,8 +301,8 @@ export function App() {
           category={category}
           q={q}
           reloadKey={reloadTick}
-          onSelect={(id) => setView({ name: 'detail', id })}
-          onAdd={() => setView(ADD_VIEW[category] ?? { name: 'add' })}
+          onSelect={(id) => updateView({ name: 'detail', id })}
+          onAdd={() => updateView(ADD_VIEW[category] ?? { name: 'add' })}
         />
       );
   }
@@ -277,15 +310,15 @@ export function App() {
   return (
     <AppShell
       active={view.name === 'generator' ? 'generator' : category}
-      onSelectCategory={selectCategory}
-      onGenerator={() => setView({ name: 'generator' })}
+      onSelectCategory={updateCategory}
+      onGenerator={() => updateView({ name: 'generator' })}
       search={view.name === 'list' ? { value: q, onChange: setQ } : undefined}
       onLock={doLock}
       onSync={doSync}
       syncing={syncing}
-      onHealth={() => setView({ name: 'health' })}
-      onSettings={() => setView({ name: 'settings' })}
-      onImport={() => setView({ name: 'import' })}
+      onHealth={() => updateView({ name: 'health' })}
+      onSettings={() => updateView({ name: 'settings' })}
+      onImport={() => updateView({ name: 'import' })}
     >
       {content}
     </AppShell>

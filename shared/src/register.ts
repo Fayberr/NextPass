@@ -37,6 +37,14 @@ async function recoveryKeyFromMnemonic(mnemonic: string): Promise<Uint8Array> {
   return hkdf32(entropy, RECOVERY_SALT, 'pm:recovery:v1');
 }
 
+/** Generate a fresh 12-word BIP39 mnemonic recovery phrase and wrap the vaultKey with it. */
+export async function createRecoveryPhrase(vaultKey: Uint8Array): Promise<{ mnemonic: string; wrappedKeyByRecovery: Uint8Array }> {
+  const mnemonic = entropyToMnemonic(randomBytes(16), wordlist);
+  const recoveryKey = await recoveryKeyFromMnemonic(mnemonic);
+  const wrappedKeyByRecovery = await aesGcmEncrypt(recoveryKey, vaultKey);
+  return { mnemonic, wrappedKeyByRecovery };
+}
+
 export interface CreateRegistrationOptions {
   isAdmin?: boolean;
   platform?: string;

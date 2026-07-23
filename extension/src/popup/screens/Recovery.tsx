@@ -15,7 +15,7 @@ export function Recovery({ phrase, identifier, onAcked }: { phrase: string; iden
   function fileContent(): string {
     const who = identifier || 'account';
     return [
-      'Password Manager — Recovery Phrase',
+      'NextPass — Recovery Phrase',
       '===================================',
       '',
       `Account: ${who}`,

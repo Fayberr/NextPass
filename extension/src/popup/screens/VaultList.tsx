@@ -8,6 +8,7 @@ import {
   Contact,
   CreditCard,
   FileText,
+  UserRound,
   Eye,
   EyeOff,
   Copy,
@@ -17,6 +18,7 @@ import {
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
 import { TotpCode } from '../TotpCode.js';
+import { baseDomain } from '@pm/shared';
 import type { ItemSummary } from '../../lib/messages.js';
 import type { Category } from '../Sidebar.js';
 
@@ -26,6 +28,7 @@ const ROW_ICON: Partial<Record<Category, (props: { size?: number; className?: st
   autofill_identity: Contact,
   card: CreditCard,
   note: FileText,
+  passkey: UserRound,
 };
 
 /**
@@ -68,6 +71,169 @@ function hostnameOf(uris: string[]): string | null {
   } catch {
     return null;
   }
+}
+
+const faviconTransparentCache = new Map<string, string>();
+
+async function getTransparentFavicon(rawUrl: string): Promise<string> {
+  if (faviconTransparentCache.has(rawUrl)) {
+    return faviconTransparentCache.get(rawUrl)!;
+  }
+
+  if (rawUrl.startsWith('chrome-extension://')) {
+    faviconTransparentCache.set(rawUrl, rawUrl);
+    return rawUrl;
+  }
+
+  try {
+    const res = await fetch(rawUrl);
+    if (!res.ok) return rawUrl;
+    const blob = await res.blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return rawUrl;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const cornerIndices = [
+      0,
+      (w - 1) * 4,
+      (h - 1) * w * 4,
+      (h * w - 1) * 4,
+    ];
+
+    const isWhiteBackground = cornerIndices.every(
+      (idx) => data[idx] >= 235 && data[idx + 1] >= 235 && data[idx + 2] >= 235
+    );
+
+    if (isWhiteBackground) {
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] >= 235 && data[i + 1] >= 235 && data[i + 2] >= 235) {
+          data[i + 3] = 0;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      const transparentDataUrl = canvas.toDataURL('image/png');
+      faviconTransparentCache.set(rawUrl, transparentDataUrl);
+      return transparentDataUrl;
+    }
+
+    faviconTransparentCache.set(rawUrl, rawUrl);
+    return rawUrl;
+  } catch {
+    faviconTransparentCache.set(rawUrl, rawUrl);
+    return rawUrl;
+  }
+}
+
+/** Multi-stage transparent favicon renderer.
+ *  - Strips white background mattes dynamically to 100% transparency.
+ *  - High-quality image smoothing & crisp high-dpi rendering.
+ */
+function FaviconIcon({
+  uris,
+  name,
+  fallbackIcon: RowIcon,
+}: {
+  uris: string[];
+  name: string;
+  fallbackIcon?: any;
+}) {
+  const domain = hostnameOf(uris);
+  const baseDom = domain ? baseDomain(domain) : null;
+  const isFayberDomain = domain?.endsWith('fayber.dev');
+  const primaryFav = faviconFor(uris);
+
+  const [src, setSrc] = useState<string | null>(null);
+  const [step, setStep] = useState<'google' | 'duck' | 'chrome' | 'none'>('none');
+
+  useEffect(() => {
+    let active = true;
+    const d = hostnameOf(uris);
+    const bd = d ? baseDomain(d) : null;
+    const isF = d?.endsWith('fayber.dev');
+    const f = faviconFor(uris);
+
+    async function loadFavicon() {
+      let targetUrl: string | null = null;
+      let nextStep: 'google' | 'duck' | 'chrome' | 'none' = 'none';
+
+      if (isF && f) {
+        targetUrl = f;
+        nextStep = 'chrome';
+      } else if (d || bd) {
+        const target = d || bd;
+        targetUrl = `https://www.google.com/s2/favicons?domain=${target}&sz=128`;
+        nextStep = 'google';
+      } else if (f) {
+        targetUrl = f;
+        nextStep = 'chrome';
+      }
+
+      if (!active) return;
+
+      if (targetUrl) {
+        setStep(nextStep);
+        const transparentUrl = await getTransparentFavicon(targetUrl);
+        if (active) setSrc(transparentUrl);
+      } else {
+        setStep('none');
+        setSrc(null);
+      }
+    }
+
+    void loadFavicon();
+
+    return () => {
+      active = false;
+    };
+  }, [uris]);
+
+  const handleError = () => {
+    if (step === 'google' && baseDom) {
+      setStep('duck');
+      const target = `https://icons.duckduckgo.com/ip3/${baseDom}.ico`;
+      void getTransparentFavicon(target).then((tUrl) => setSrc(tUrl));
+    } else if (step === 'duck') {
+      const f = faviconFor(uris);
+      if (f) {
+        setStep('chrome');
+        setSrc(f);
+      } else {
+        setStep('none');
+        setSrc(null);
+      }
+    } else {
+      setStep('none');
+      setSrc(null);
+    }
+  };
+
+  if (src && step !== 'none') {
+    return (
+      <img
+        src={src}
+        alt=""
+        onError={handleError}
+        className="h-full w-full rounded-md object-cover"
+        style={{ imageRendering: '-webkit-optimize-contrast' }}
+      />
+    );
+  }
+
+  if (RowIcon) {
+    return <RowIcon size={16} className="text-white/40" />;
+  }
+
+  return <span className="text-xs text-white/40">{name.charAt(0).toUpperCase()}</span>;
 }
 
 interface ItemGroup {
@@ -145,6 +311,11 @@ function quickFieldsFor(type: string, fields: Record<string, unknown> | undefine
     case 'autofill_identity':
       if (str('email')) out.push({ key: 'email', label: 'Email', value: str('email') });
       if (str('phone')) out.push({ key: 'phone', label: 'Phone', value: str('phone') });
+      break;
+    case 'passkey':
+      if (str('rpId')) out.push({ key: 'rpId', label: 'Domain', value: str('rpId') });
+      if (str('userName') || str('userDisplayName'))
+        out.push({ key: 'userName', label: 'User', value: str('userName') || str('userDisplayName') });
       break;
   }
   return out;
@@ -315,12 +486,8 @@ export function VaultList({
             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
               {item.totp ? (
                 <KeyRound size={16} className="text-violet-soft" />
-              ) : fav ? (
-                <img src={fav} alt="" className="h-full w-full object-cover" />
-              ) : RowIcon ? (
-                <RowIcon size={16} className="text-white/40" />
               ) : (
-                <span className="text-xs text-white/40">{item.name.charAt(0).toUpperCase()}</span>
+                <FaviconIcon uris={item.uris} name={item.name} fallbackIcon={RowIcon} />
               )}
             </div>
             <div className="min-w-0 flex-1">
@@ -406,11 +573,7 @@ export function VaultList({
           className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
         >
           <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
-            {fav ? (
-              <img src={fav} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-xs text-white/40">{first.name.charAt(0).toUpperCase()}</span>
-            )}
+            <FaviconIcon uris={first.uris} name={first.name} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold tracking-tight text-white/90">{first.name}</div>

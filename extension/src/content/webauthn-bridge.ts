@@ -92,7 +92,7 @@ function approve(op: 'create' | 'get', rpId: string, userName?: string, passkeys
               <path d="m9 12 2 2 4-4"/>
             </svg>
           </div>
-          <div class="t">Password Manager</div>
+          <div class="t">NextPass</div>
         </div>
         <p class="b">${title}</p>
         ${actions}

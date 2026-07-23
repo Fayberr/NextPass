@@ -11,8 +11,17 @@ import {
   createRegistration,
   decryptItem,
   deriveAuthKeyHash,
+  deriveMasterKey,
+  splitMasterKey,
   encryptItem,
+  aesGcmEncrypt,
+  aesGcmDecrypt,
+  DEFAULT_KDF_PARAMS,
+  randomBytes,
+  sha256,
+  fromB64,
   fromB64url,
+  fromUtf8,
   itemMatchesUrl,
   auditVault,
   signAssertion,
@@ -20,6 +29,8 @@ import {
   type AuditReport,
   toB64,
   unlockWithMasterPassword,
+  unlockWithRecovery,
+  createRecoveryPhrase,
   type ItemRecord,
   type LoginFields,
   type PasskeyFields,
@@ -206,12 +217,16 @@ export class SessionManager {
   async unlock(password: string): Promise<void> {
     const acct = await getAccount();
     if (!acct) throw new Error('No account on this device — register or log in first.');
-    this.vaultKey = await unlockWithMasterPassword(
-      password,
-      acct.masterPwSalt,
-      acct.kdfParams,
-      acct.wrappedKeyByMasterPw,
-    );
+    try {
+      this.vaultKey = await unlockWithMasterPassword(
+        password,
+        acct.masterPwSalt,
+        acct.kdfParams,
+        acct.wrappedKeyByMasterPw,
+      );
+    } catch {
+      throw new Error('Incorrect master password. Please try again.');
+    }
     await setStoredKey(this.vaultKey);
     this.lastError = null;
     // Best-effort background refresh; unlock still succeeds fully offline.
@@ -229,6 +244,409 @@ export class SessionManager {
     await cacheClear();
     await clearAccount();
     await setPendingRecovery(null);
+  }
+
+  async changeMasterPassword(currentPassword: string, newPassword: string): Promise<void> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+
+    let currentVaultKey: Uint8Array;
+    try {
+      currentVaultKey = await unlockWithMasterPassword(
+        currentPassword,
+        acct.masterPwSalt,
+        acct.kdfParams,
+        acct.wrappedKeyByMasterPw,
+      );
+    } catch {
+      throw new Error('Incorrect master password. Please try again.');
+    }
+
+    const newSalt = randomBytes(16);
+    const newMasterKey = await deriveMasterKey(newPassword, newSalt, DEFAULT_KDF_PARAMS);
+    const { encKey: newEncKey, authKey: newAuthKey } = await splitMasterKey(newMasterKey, newSalt);
+    const newAuthKeyHash = await sha256(newAuthKey);
+    const newWrappedKeyByMasterPw = await aesGcmEncrypt(newEncKey, currentVaultKey);
+
+    const api = this.api(acct);
+    await api.changePassword({
+      masterPwSalt: toB64(newSalt),
+      kdfParams: DEFAULT_KDF_PARAMS,
+      authKeyHash: toB64(newAuthKeyHash),
+      wrappedKeyByMasterPw: toB64(newWrappedKeyByMasterPw),
+    });
+
+    await patchAccount({
+      masterPwSalt: toB64(newSalt),
+      kdfParams: DEFAULT_KDF_PARAMS,
+      authKeyHash: toB64(newAuthKeyHash),
+      wrappedKeyByMasterPw: toB64(newWrappedKeyByMasterPw),
+    });
+
+    // Lock vault immediately on password change so user unlocks with new password
+    await this.lock();
+  }
+
+  async downloadRecoveryPhrase(): Promise<{ data: string; filename: string }> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const vaultKey = this.requireKey();
+
+    const { mnemonic, wrappedKeyByRecovery } = await createRecoveryPhrase(vaultKey);
+    const api = this.api(acct);
+    await api.updateRecovery({ wrappedKeyByRecovery: toB64(wrappedKeyByRecovery) });
+    await patchAccount({ wrappedKeyByRecovery: toB64(wrappedKeyByRecovery) });
+
+    const text = [
+      `NextPass — 12-Word Recovery Phrase`,
+      `==================================`,
+      ``,
+      `Account: ${acct.identifier}`,
+      `Generated: ${new Date().toISOString()}`,
+      ``,
+      `YOUR 12-WORD RECOVERY PHRASE:`,
+      `${mnemonic}`,
+      ``,
+      `IMPORTANT: Store this file securely offline. If you ever forget your master password,`,
+      `you can use this 12-word phrase to recover access to your vault and set a new password.`,
+    ].join('\n');
+
+    return {
+      data: text,
+      filename: `nextpass-recovery-phrase-${new Date().toISOString().slice(0, 10)}.txt`,
+    };
+  }
+
+  async recoverAccount(mnemonic: string, newPassword: string): Promise<VaultState> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+
+    let vaultKey: Uint8Array;
+    try {
+      vaultKey = await unlockWithRecovery(mnemonic.trim(), acct.wrappedKeyByRecovery);
+    } catch {
+      throw new Error('Incorrect 12-word recovery phrase. Please check and try again.');
+    }
+
+    const newSalt = randomBytes(16);
+    const newMasterKey = await deriveMasterKey(newPassword, newSalt, DEFAULT_KDF_PARAMS);
+    const { encKey: newEncKey, authKey: newAuthKey } = await splitMasterKey(newMasterKey, newSalt);
+    const newAuthKeyHash = await sha256(newAuthKey);
+    const newWrappedKeyByMasterPw = await aesGcmEncrypt(newEncKey, vaultKey);
+
+    const api = this.api(acct);
+    await api.changePassword({
+      masterPwSalt: toB64(newSalt),
+      kdfParams: DEFAULT_KDF_PARAMS,
+      authKeyHash: toB64(newAuthKeyHash),
+      wrappedKeyByMasterPw: toB64(newWrappedKeyByMasterPw),
+    });
+
+    await patchAccount({
+      masterPwSalt: toB64(newSalt),
+      kdfParams: DEFAULT_KDF_PARAMS,
+      authKeyHash: toB64(newAuthKeyHash),
+      wrappedKeyByMasterPw: toB64(newWrappedKeyByMasterPw),
+    });
+
+    this.vaultKey = vaultKey;
+    await setStoredKey(this.vaultKey);
+    this.lastError = null;
+    void this.sync().catch(() => undefined);
+
+    return this.getState();
+  }
+
+  async purgeVault(
+    masterPassword: string,
+    downloadBackup: boolean
+  ): Promise<{ backupData?: string; backupFilename?: string }> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+
+    // 1. Verify Master Password
+    try {
+      await unlockWithMasterPassword(
+        masterPassword,
+        acct.masterPwSalt,
+        acct.kdfParams,
+        acct.wrappedKeyByMasterPw,
+      );
+    } catch {
+      throw new Error('Incorrect master password. Please try again.');
+    }
+
+    let backup: { data: string; filename: string } | undefined = undefined;
+
+    // 2. Export encrypted backup if requested
+    if (downloadBackup) {
+      backup = await this.exportVault('encrypted');
+    }
+
+    // 3. Wipe all saved items on server + local cache
+    const api = this.api(acct);
+    await api.purgeItems();
+    await cacheClear();
+    this.decrypted.clear();
+
+    return {
+      backupData: backup?.data,
+      backupFilename: backup?.filename,
+    };
+  }
+
+  async exportVault(format: 'encrypted' | 'unencrypted'): Promise<{ data: string; filename: string }> {
+    const acct = await getAccount();
+    // Guarantee cache is synced before exporting
+    await this.sync().catch(() => undefined);
+    const records = await cacheGetAll();
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    if (format === 'encrypted') {
+      const backup = {
+        version: '1.0',
+        generator: 'NextPass',
+        exportedAt: new Date().toISOString(),
+        type: 'encrypted',
+        vaultId: acct?.vaultId || 'local',
+        itemCount: records.length,
+        items: records,
+      };
+      return {
+        data: JSON.stringify(backup, null, 2),
+        filename: `nextpass-backup-encrypted-${dateStr}.json`,
+      };
+    } else {
+      const decryptedItems = await Promise.all(
+        records.map(async (r) => {
+          try {
+            const d = await this.decryptRecord(r);
+            return {
+              id: r.id,
+              type: r.type,
+              favorite: Boolean(r.favorite),
+              createdAt: new Date(r.createdAt).toISOString(),
+              updatedAt: new Date(r.updatedAt).toISOString(),
+              fields: d.fields,
+            };
+          } catch {
+            return {
+              id: r.id,
+              type: r.type,
+              error: 'Failed to decrypt item',
+            };
+          }
+        })
+      );
+
+      const backup = {
+        version: '1.0',
+        generator: 'NextPass',
+        exportedAt: new Date().toISOString(),
+        type: 'unencrypted',
+        itemCount: decryptedItems.length,
+        items: decryptedItems,
+      };
+
+      return {
+        data: JSON.stringify(backup, null, 2),
+        filename: `nextpass-export-unencrypted-${dateStr}.json`,
+      };
+    }
+  }
+
+  async createGenericItem(type: ItemType, fields: unknown, favorite?: boolean): Promise<void> {
+    await this.hydrate();
+    const key = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const upsert = await encryptItem(key, type, fields, { favorite });
+    const rec = await this.api(acct).createItem(upsert);
+    await cacheUpsert([rec]);
+    this.decrypted.delete(rec.id);
+  }
+
+  private isDuplicateItem(
+    existing: { id: string; type: string; fields: Record<string, unknown> },
+    candidate: { id?: string; type: string; fields: Record<string, unknown> }
+  ): boolean {
+    if (candidate.id && existing.id && candidate.id === existing.id) return true;
+    if (existing.type !== candidate.type) return false;
+
+    const ef = existing.fields || {};
+    const cf = candidate.fields || {};
+
+    const estr = (k: string) => String(ef[k] ?? '').trim().toLowerCase();
+    const cstr = (k: string) => String(cf[k] ?? '').trim().toLowerCase();
+
+    switch (candidate.type) {
+      case 'login': {
+        const eName = estr('name');
+        const cName = cstr('name');
+        const eUser = estr('username') || estr('email');
+        const cUser = cstr('username') || cstr('email');
+        const ePass = estr('password');
+        const cPass = cstr('password');
+
+        const eUri = Array.isArray(ef.uris) && ef.uris[0] ? String(ef.uris[0]).trim().toLowerCase() : '';
+        const cUri = Array.isArray(cf.uris) && cf.uris[0] ? String(cf.uris[0]).trim().toLowerCase() : '';
+
+        // If usernames are non-empty and DIFFERENT, they are distinct accounts!
+        if (eUser && cUser && eUser !== cUser) return false;
+
+        // If passwords are non-empty and DIFFERENT, they are distinct accounts!
+        if (ePass && cPass && ePass !== cPass) return false;
+
+        // Duplicate if (same user AND (same name OR same URI))
+        if (eUser && eUser === cUser && (eName === cName || eUri === cUri)) return true;
+
+        // Duplicate if (same name AND same URI AND same password)
+        if (eName && eName === cName && eUri && eUri === cUri && ePass === cPass) return true;
+
+        return false;
+      }
+      case 'passkey': {
+        const eCred = estr('credentialid') || estr('credentialId');
+        const cCred = cstr('credentialid') || cstr('credentialId');
+        if (eCred && cCred) return eCred === cCred;
+
+        const eRp = estr('rpid') || estr('rpId');
+        const cRp = cstr('rpid') || cstr('rpId');
+        const eUser = estr('username') || estr('userName') || estr('userdisplayName');
+        const cUser = cstr('username') || cstr('userName') || cstr('userdisplayName');
+
+        if (eUser && cUser && eUser !== cUser) return false;
+        return Boolean(eRp && eRp === cRp && eUser && eUser === cUser);
+      }
+      case 'card': {
+        const eNum = estr('number');
+        const cNum = cstr('number');
+        return Boolean(eNum && eNum === cNum);
+      }
+      case 'totp': {
+        const eSec = estr('secret');
+        const cSec = cstr('secret');
+        if (eSec && cSec) return eSec === cSec;
+        const eName = estr('name');
+        const cName = cstr('name');
+        return Boolean(eName && eName === cName && eSec === cSec);
+      }
+      case 'secret': {
+        const eName = estr('name');
+        const cName = cstr('name');
+        const eVal = estr('value');
+        const cVal = cstr('value');
+        return Boolean(eName && eName === cName && eVal === cVal);
+      }
+      case 'identity': {
+        const eName = estr('name');
+        const cName = cstr('name');
+        const eEmail = estr('email');
+        const cEmail = cstr('email');
+        return Boolean(eName && eName === cName && eEmail && eEmail === cEmail);
+      }
+      case 'note': {
+        const eName = estr('name');
+        const cName = cstr('name');
+        const eNote = estr('note') || estr('text');
+        const cNote = cstr('note') || cstr('text');
+        return Boolean(eName && eName === cName && eNote === cNote);
+      }
+      default: {
+        return false;
+      }
+    }
+  }
+
+  async importBackup(
+    jsonText: string,
+    password?: string
+  ): Promise<{ imported: number; duplicates: number; failed: number }> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const vaultKey = this.requireKey();
+
+    let backup: any;
+    try {
+      backup = JSON.parse(jsonText);
+    } catch {
+      throw new Error('Invalid JSON format.');
+    }
+
+    const itemsToImport: Array<{ id?: string; type: ItemType; fields: Record<string, unknown>; favorite?: boolean }> = [];
+
+    if (backup.type === 'encrypted') {
+      const records: ItemRecord[] = backup.items || [];
+      for (const r of records) {
+        try {
+          const fields = await decryptItem<Record<string, unknown>>(vaultKey, r);
+          itemsToImport.push({ id: r.id, type: r.type, fields, favorite: r.favorite });
+        } catch {
+          if (password) {
+            const decMasterKey = await deriveMasterKey(password, acct.masterPwSalt, acct.kdfParams);
+            const { encKey } = await splitMasterKey(decMasterKey, acct.masterPwSalt);
+            const fields = await decryptItem<Record<string, unknown>>(encKey, r);
+            itemsToImport.push({ id: r.id, type: r.type, fields, favorite: r.favorite });
+          } else {
+            throw new Error('Failed to decrypt encrypted backup items with current vault key.');
+          }
+        }
+      }
+    } else if (backup.type === 'encrypted_password') {
+      if (!password) throw new Error('Backup password required.');
+      const salt = fromB64(backup.salt);
+      const kdfParams = backup.kdfParams || DEFAULT_KDF_PARAMS;
+      const decMasterKey = await deriveMasterKey(password, salt, kdfParams);
+      const { encKey } = await splitMasterKey(decMasterKey, salt);
+      const payloadBytes = fromB64(backup.payload);
+      const decryptedBytes = await aesGcmDecrypt(encKey, payloadBytes);
+      const rawItems = JSON.parse(fromUtf8(decryptedBytes));
+      for (const i of rawItems) {
+        itemsToImport.push({ id: i.id, type: i.type, fields: i.fields || i, favorite: i.favorite });
+      }
+    } else if (backup.type === 'unencrypted' || Array.isArray(backup.items)) {
+      const rawItems = backup.items || [];
+      for (const i of rawItems) {
+        itemsToImport.push({ id: i.id, type: i.type, fields: i.fields || i, favorite: i.favorite });
+      }
+    } else {
+      throw new Error('Unrecognized backup format.');
+    }
+
+    // Load active items in vault to check for duplicates
+    const existingRecords = (await cacheGetAll()).filter((r) => !r.deletedAt);
+    const existingItems = await Promise.all(
+      existingRecords.map(async (r) => {
+        try {
+          const { fields } = await this.decryptRecord(r);
+          return { id: r.id, type: r.type, fields: fields as Record<string, unknown> };
+        } catch {
+          return { id: r.id, type: r.type, fields: {} };
+        }
+      })
+    );
+
+    let imported = 0;
+    let duplicates = 0;
+    let failed = 0;
+
+    for (const item of itemsToImport) {
+      try {
+        const isDup = existingItems.some((e) => this.isDuplicateItem(e, item));
+        if (isDup) {
+          duplicates++;
+          continue;
+        }
+
+        await this.createGenericItem(item.type, item.fields, item.favorite);
+        existingItems.push({ id: item.id || '', type: item.type, fields: item.fields });
+        imported++;
+      } catch {
+        failed++;
+      }
+    }
+
+    return { imported, duplicates, failed };
   }
 
   // --- sync ---
@@ -278,6 +696,7 @@ export class SessionManager {
         name: (fields.name as string) ?? '(no name)',
         username:
           (fields.username as string) ??
+          (fields.userName as string) ??
           (fields.email as string) ??
           (fields.account as string) ??
           (fields.issuer as string) ??

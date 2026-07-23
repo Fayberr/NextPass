@@ -214,11 +214,11 @@ function openLockPrompt(pw: HTMLInputElement, anchor: HTMLInputElement = pw): vo
         cursor:pointer;background:#6d5ce0;color:#fff}
       .use:hover{filter:brightness(1.08)}
     </style>
-    <div class="card" role="dialog" aria-label="Password Manager locked">
+    <div class="card" role="dialog" aria-label="NextPass locked">
       <div class="hd">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Password Manager
+        NextPass
       </div>
       <div class="msg">Vault is locked. Unlock it to see saved logins or generate a password here.</div>
       <button class="use" id="unlock">Unlock</button>
@@ -314,11 +314,11 @@ function openPicker(pw: HTMLInputElement, matches: AutofillMatch[], anchor: HTML
       .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .sub{font-size:11px;color:rgba(233,231,239,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     </style>
-    <div class="card" role="dialog" aria-label="Password Manager accounts">
+    <div class="card" role="dialog" aria-label="NextPass accounts">
       <div class="hd">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Password Manager
+        NextPass
       </div>
       <div class="list">${rows}</div>
     </div>`;
@@ -450,7 +450,7 @@ function ensureBadge(field: HTMLInputElement, pwField: HTMLInputElement = field)
       .key:hover{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
       .key.active{background:#6d5ce0;color:#fff;box-shadow:0 0 12px rgba(109,92,224,.5)}
     </style>
-    <button class="key" title="Password Manager" tabindex="-1" aria-label="Open Password Manager">${KEY_SVG}</button>`;
+    <button class="key" title="NextPass" tabindex="-1" aria-label="Open NextPass">${KEY_SVG}</button>`;
   document.documentElement.appendChild(host);
   const btn = shadow.querySelector<HTMLButtonElement>('.key')!;
   const badge: Badge = { host, btn, inset: computeRightInset(field), pwField };
@@ -791,7 +791,7 @@ function openIdentityPicker(
       .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .sub{font-size:11px;color:rgba(233,231,239,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     </style>
-    <div class="card" role="dialog" aria-label="Password Manager identities">
+    <div class="card" role="dialog" aria-label="NextPass identities">
       <div class="hd">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1029,7 +1029,7 @@ function openCardPicker(
       .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .sub{font-size:11px;color:rgba(233,231,239,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     </style>
-    <div class="card" role="dialog" aria-label="Password Manager cards">
+    <div class="card" role="dialog" aria-label="NextPass cards">
       <div class="hd">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
@@ -1361,7 +1361,7 @@ function showSaveCard(identifier: string, password: string, existing: AutofillMa
       <div class="h">
         <div class="dot"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></div>
-        <div class="t">Password Manager</div>
+        <div class="t">NextPass</div>
       </div>
       <p class="b">${updating ? 'Update the saved password for' : 'Save this login for'} <span class="rp">${esc(
         site,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Field, Input } from '../ui.js';
-import { ShieldCheck } from '../icons.js';
+import { ShieldCheck, AlertTriangle } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SERVER_URL } from '../../lib/config.js';
 import type { VaultState } from '../../lib/messages.js';
@@ -87,85 +87,207 @@ export function Unlock({
     }
   }
 
+  const [showRecoveryMode, setShowRecoveryMode] = useState(false);
+  const [recoveryMnemonic, setRecoveryMnemonic] = useState('');
+  const [newMasterPw, setNewMasterPw] = useState('');
+  const [confirmNewMasterPw, setConfirmNewMasterPw] = useState('');
+
+  async function handleRecoverySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const words = recoveryMnemonic.trim().split(/\s+/);
+    if (words.length !== 12) {
+      setError('Please enter all 12 words of your recovery phrase.');
+      return;
+    }
+    if (newMasterPw.length < 8) {
+      setError('New master password must be at least 8 characters.');
+      return;
+    }
+    if (newMasterPw !== confirmNewMasterPw) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await send({
+        kind: 'recover_account',
+        mnemonic: recoveryMnemonic.trim(),
+        newPassword: newMasterPw,
+      });
+
+      if (!res.ok) {
+        setError(res.error || 'Failed to recover vault.');
+      } else if (res.kind === 'state') {
+        onUnlocked(res.state);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex min-h-[500px] flex-col justify-center p-6">
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-glow to-indigo-500 text-white shadow-glass">
           <ShieldCheck size={28} />
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">Password Manager</h1>
+        <h1 className="text-xl font-semibold tracking-tight">NextPass</h1>
         <p className="mt-1 text-xs text-white/40">
-          {configured ? 'Enter your master password to unlock' : 'Supercharge your secrets'}
+          {showRecoveryMode
+            ? 'Vault Recovery — 12-Word Phrase'
+            : configured
+            ? 'Enter your master password to unlock'
+            : 'The next Generation Password Manager'}
         </p>
       </div>
 
       <Card>
-        {!configured && (
-          <div className="mb-3 flex rounded-full bg-white/5 p-1 text-xs">
-            {(['login', 'register'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`flex-1 rounded-full py-1.5 font-medium transition ${
-                  mode === m ? 'bg-violet-glow text-white' : 'text-white/50'
-                }`}
-              >
-                {m === 'login' ? 'Log in' : 'Register'}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {!configured && (
-          <>
-            <Field label="Email or username">
-              <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+        {showRecoveryMode ? (
+          <form onSubmit={handleRecoverySubmit} className="space-y-3">
+            <Field label="12-Word Recovery Phrase">
+              <textarea
+                value={recoveryMnemonic}
+                onChange={(e) => setRecoveryMnemonic(e.target.value)}
+                placeholder="word1 word2 word3 ..."
+                rows={3}
+                className="w-full rounded-xl border border-white/10 bg-white/5 p-2.5 text-xs text-white placeholder:text-white/20 focus:border-violet-500 focus:outline-none"
+                required
+              />
             </Field>
-            {showAdvanced && (
-              <Field label="Server URL">
-                <Input
-                  value={serverUrl}
-                  onChange={(e) => setServerUrl(e.target.value)}
-                  placeholder="http://localhost:8787"
-                />
-              </Field>
+
+            <Field label="New Master Password">
+              <Input
+                type="password"
+                value={newMasterPw}
+                onChange={(e) => setNewMasterPw(e.target.value)}
+                placeholder="••••••••••••"
+                required
+              />
+            </Field>
+
+            <Field label="Confirm New Password">
+              <Input
+                type="password"
+                value={confirmNewMasterPw}
+                onChange={(e) => setConfirmNewMasterPw(e.target.value)}
+                placeholder="••••••••••••"
+                required
+              />
+            </Field>
+
+            {error && <p className="text-xs text-red-400">{error}</p>}
+
+            <Button type="submit" variant="primary" className="w-full" disabled={busy}>
+              {busy ? 'Recovering...' : 'Recover Vault & Reset Password'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowRecoveryMode(false);
+                setError(null);
+              }}
+              className="mt-2 block w-full text-center text-xs text-white/40 hover:text-white/70"
+            >
+              Cancel & return to unlock
+            </button>
+          </form>
+        ) : (
+          <>
+            {!configured && (
+              <div className="mb-3 flex rounded-full bg-white/5 p-1 text-xs">
+                {(['login', 'register'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`flex-1 rounded-full py-1.5 font-medium transition ${
+                      mode === m ? 'bg-violet-glow text-white' : 'text-white/50'
+                    }`}
+                  >
+                    {m === 'login' ? 'Log in' : 'Register'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!configured && (
+              <>
+                <Field label="Email or username">
+                  <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+                </Field>
+                {showAdvanced && (
+                  <Field label="Server URL">
+                    <Input
+                      value={serverUrl}
+                      onChange={(e) => setServerUrl(e.target.value)}
+                      placeholder="http://localhost:8787"
+                    />
+                  </Field>
+                )}
+              </>
+            )}
+
+            <Field label="Master password">
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
+                autoFocus
+                autoComplete="current-password"
+              />
+            </Field>
+
+            {error && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300">
+                <AlertTriangle size={14} className="shrink-0 text-rose-400" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <Button className="w-full" onClick={submit} disabled={busy || !password || (!configured && !identifier)}>
+              {busy ? 'Working…' : configured ? 'Unlock' : mode === 'register' ? 'Create vault' : 'Log in'}
+            </Button>
+
+            {!configured && (
+              <button
+                onClick={() => setShowAdvanced((s) => !s)}
+                className="mt-3 block w-full text-center text-xs text-white/25 hover:text-white/50"
+              >
+                {showAdvanced ? 'Hide advanced' : 'Advanced'}
+              </button>
+            )}
+
+            {configured && (
+              <div className="mt-3 flex items-center justify-between text-xs text-white/30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRecoveryMode(true);
+                    setError(null);
+                  }}
+                  className="hover:text-violet-300 hover:underline"
+                >
+                  Forgot password?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => send({ kind: 'forget' }).then((r) => r.ok && r.kind === 'state' && onUnlocked(r.state))}
+                  className="hover:text-white/60 hover:underline"
+                >
+                  Use a different account
+                </button>
+              </div>
             )}
           </>
-        )}
-
-        <Field label="Master password">
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submit()}
-            autoFocus
-            autoComplete="current-password"
-          />
-        </Field>
-
-        {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
-
-        <Button className="w-full" onClick={submit} disabled={busy || !password || (!configured && !identifier)}>
-          {busy ? 'Working…' : configured ? 'Unlock' : mode === 'register' ? 'Create vault' : 'Log in'}
-        </Button>
-
-        {!configured && (
-          <button
-            onClick={() => setShowAdvanced((s) => !s)}
-            className="mt-3 block w-full text-center text-xs text-white/25 hover:text-white/50"
-          >
-            {showAdvanced ? 'Hide advanced' : 'Advanced'}
-          </button>
-        )}
-
-        {configured && (
-          <button
-            onClick={() => send({ kind: 'forget' }).then((r) => r.ok && r.kind === 'state' && onUnlocked(r.state))}
-            className="mt-3 block w-full text-center text-xs text-white/30 hover:text-white/50"
-          >
-            Use a different account
-          </button>
         )}
       </Card>
     </div>

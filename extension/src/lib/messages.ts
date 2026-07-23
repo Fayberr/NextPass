@@ -67,6 +67,12 @@ export type Msg =
   | { kind: 'audit' }
   | { kind: 'get_settings' }
   | { kind: 'set_settings'; patch: Partial<Settings> }
+  | { kind: 'change_master_password'; currentPassword: string; newPassword: string }
+  | { kind: 'download_recovery' }
+  | { kind: 'recover_account'; mnemonic: string; newPassword: string }
+  | { kind: 'export_vault'; format: 'encrypted' | 'unencrypted' }
+  | { kind: 'import_backup'; jsonText: string; password?: string }
+  | { kind: 'purge_vault'; masterPassword: string; downloadBackup: boolean }
   | { kind: 'sync' }
   | { kind: 'autofill_query'; url: string }
   | { kind: 'autofill_identity_query' }
@@ -85,6 +91,9 @@ export type MsgResult =
   | { ok: true; kind: 'card_autofill'; matches: AutofillCardMatch[] }
   | { ok: true; kind: 'audit'; report: AuditReport }
   | { ok: true; kind: 'settings'; settings: Settings }
+  | { ok: true; kind: 'export'; data: string; filename: string }
+  | { ok: true; kind: 'import_result'; imported: number; duplicates: number; failed: number }
+  | { ok: true; kind: 'purge_result'; backupData?: string; backupFilename?: string }
   | { ok: true; kind: 'passkey_created'; res: PasskeyCreateRes }
   | { ok: true; kind: 'passkey_asserted'; res: PasskeyGetRes }
   | { ok: true; kind: 'void' }

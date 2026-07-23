@@ -40,7 +40,11 @@ export function toB64(b: Uint8Array): string {
 }
 
 export function fromB64(s: string): Uint8Array {
-  const bin = atob(s);
+  let clean = s.trim().replace(/-/g, '+').replace(/_/g, '/');
+  const rem = clean.length % 4;
+  if (rem === 2) clean += '==';
+  else if (rem === 3) clean += '=';
+  const bin = atob(clean);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;

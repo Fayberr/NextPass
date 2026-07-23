@@ -103,4 +103,12 @@ export async function itemRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
     softDelete.run({ id, vault_id: vaultId, cursor });
     return reply.code(204).send();
   });
+
+  // --- DELETE /api/items/purge (hard wipe all items in vault) --------------
+  const purgeItems = db.prepare('DELETE FROM items WHERE vault_id = ?');
+  app.delete('/api/items/purge', async (request, reply) => {
+    const vaultId = request.auth!.vaultId;
+    purgeItems.run(vaultId);
+    return reply.send({ ok: true });
+  });
 }

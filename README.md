@@ -1,16 +1,27 @@
 # NextPass - The Next Generation Password Manager 🔒
 
-Self-hosted, zero-knowledge password manager with automatic WebAuthn Passkey interception, one-click autofill, TOTP codes, bank cards, identities, secrets, and encrypted vault backup/import. Built from scratch - **not** a Vaultwarden fork.
+Self-hosted, zero-knowledge password manager with automatic WebAuthn Passkey interception, one-click autofill, Google Account Sign-In, TOTP 2FA codes, payment cards, identities, API secrets, secure notes, and encrypted vault backup/import. Built from scratch - **not** a Vaultwarden fork.
 
 ## Monorepo Layout
 
 | Workspace | Stack | Description / Status |
 |---|---|---|
-| `shared/` | TS crypto + API types | **Phase 0 & 1 (Built)** - WebCrypto, Argon2id (WASM), BIP39 12-word recovery, AES-256-GCM, RSA-OAEP-4096 |
-| `server/` | Node.js + Fastify + SQLite | **Phase 0 (Built)** - Fastify REST API, SQLite (`pm.db`), systemd service (`password-manager-server.service`) |
-| `extension/` | Manifest V3 (Chrome / Edge / Opera GX) | **Phase 1 & 2 (Built)** - React 18, Vite 5, Tailwind CSS, WebAuthn Proxy Shim, Purge Vault, Backup Import/Export |
-| `desktop/` | Electron | Phase 5 (Scaffold / Planned) |
+| `shared/` | TS crypto + API types | **Built (100% Tested)** - WebCrypto, Argon2id (WASM), BIP39 12-word recovery, AES-256-GCM, WebAuthn FIDO2, TOTP (RFC 6238) |
+| `server/` | Node.js + Fastify + SQLite | **Built (100% Tested)** - Fastify REST API, SQLite (`pm.db`), Google OAuth endpoints, Vault CRUD & Sync, systemd service |
+| `extension/` | Manifest V3 (Chrome / Edge / Opera GX) | **Built (`v0.14.4`)** - React 18, Vite 5, Tailwind CSS, Google Auth Onboarding Flow, Shadow DOM Autofill Engine, WebAuthn Proxy |
+| `desktop/` | Electron | Phase 5 (Planned) |
 | `android/` | Kotlin (Native) | Phase 6 (Planned) |
+
+## Features (v0.14.4)
+
+- 🔑 **WebAuthn Passkey Interception**: Authoritative browser-level passkey provider (`chrome.webAuthenticationProxy`). Intercepts creation & assertion ceremonies.
+- 🌐 **Google Account Sign-In & Onboarding**: Fast Google account pairing & single-click unlock workflow with dedicated master password entry.
+- ⚡ **Universal Smart Autofill (Shadow DOM & SPA)**: Inline field detection and autofill for logins, identities, and credit cards across standard HTML forms, Web Components, and single-page apps.
+- ⏱️ **TOTP Authenticator & Code Generator**: RFC 6238 compliant live 6-digit TOTP code generation for standalone 2FA items and login credentials.
+- 📦 **6 Vault Item Types**: Full support for Logins, Identities, Credit Cards, Authenticators (TOTP), Secrets/API Keys, and Encrypted Secure Notes.
+- 🔔 **Smart Prompts Engine**: Automatic **"Save to NextPass?"** banner on new account registration forms and **"Update Password?"** banner on password changes.
+- 🔐 **Zero-Knowledge Backup Import & Export**: Export and import encrypted or unencrypted `.json` backups with duplicate detection.
+- 🛡️ **Recovery Phrase**: 12-word BIP39 phrase export and unlock recovery flow.
 
 ## Zero-Knowledge Security Model
 
@@ -23,15 +34,7 @@ The server only ever stores ciphertext and wrapped keys. No unencrypted credenti
 - **Per-Item Keys (AES-256):** Each item is encrypted with its own item key, wrapped under the Vault Key.
 - **Symmetric Encryption:** AES-256-GCM (`IV ‖ Ciphertext ‖ Tag`).
 
-## Features
-
-- 🔑 **WebAuthn Passkey Interception**: Authoritative browser-level passkey provider (`chrome.webAuthenticationProxy`). Intercepts creation & assertion ceremonies.
-- ⚡ **One-Click Smart Autofill**: Detects login, card, and identity fields across static and SPA forms.
-- 🔐 **Zero-Knowledge Backup Import & Export**: Export and import encrypted or unencrypted `.json` backups with duplicate detection.
-- ☣️ **Vault Purge & Wiping**: Authenticated vault purge with optional automated backup export.
-- 🛡️ **Recovery Phrase**: 12-word BIP39 phrase export and unlock recovery flow.
-
-## Local Development & Server Setup
+## Local Development & Testing
 
 ```bash
 # Install dependencies
@@ -40,10 +43,13 @@ npm install
 # Build all workspaces
 npm run build
 
+# Run comprehensive test suites across shared and server
+npm test
+
 # Start backend server locally (default: http://127.0.0.1:8787)
 npm run dev:server
 
-# Build extension
+# Build extension (dist/)
 npm run build:ext
 ```
 

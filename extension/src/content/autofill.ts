@@ -17,26 +17,37 @@ function isVisible(el: HTMLElement): boolean {
 }
 
 /**
+function queryInputsRecursive(
+  scope: ParentNode = document,
+  selector: string = 'input:not([type="hidden"])',
+): HTMLInputElement[] {
+  const results: HTMLInputElement[] = [];
+  try {
+    const list = Array.from(scope.querySelectorAll<HTMLInputElement>(selector));
+    results.push(...list);
+    const elements = Array.from(scope.querySelectorAll<HTMLElement>('*'));
+    for (const el of elements) {
+      if (el.shadowRoot) {
+        results.push(...queryInputsRecursive(el.shadowRoot, selector));
+      }
+    }
+  } catch {}
+  return results;
+}
+
+/**
  * Whether a password field looks like a genuine new-password/signup field (safe to auto-open the
- * generator for), rather than an ordinary login field. Many real sites (e.g. demoqa.com) never set
- * `autocomplete` at all, so "not marked current-password" is NOT good enough evidence on its own
- * (that previously caused the generator to pop open on plain login pages) - require POSITIVE proof:
- * either an explicit `autocomplete="new-password"`, or a second visible password field in the same
- * scope (a confirm/repeat-password sibling, which login forms never have).
+ * generator for), rather than an ordinary login field.
  */
 function isLikelyNewPasswordField(pw: HTMLInputElement): boolean {
   const ac = pw.getAttribute('autocomplete') ?? '';
   if (/new-password/.test(ac)) return true;
   const scope = pw.closest('form') ?? document;
-  const pwFields = Array.from(scope.querySelectorAll<HTMLInputElement>(PW_SELECTOR)).filter(isVisible);
+  const pwFields = queryInputsRecursive(scope, PW_SELECTOR).filter(isVisible);
   return pwFields.length > 1;
 }
 
-// Locale-aware word lists (same word-run technique as SUBMIT_KEYWORDS/normalizeWords further down,
-// hoisted-function-callable from here since this module is bundled as one top-level scope) for
-// telling a "create a brand-new account" control apart from an ordinary "sign in" one. Deliberately
-// narrower than SUBMIT_KEYWORDS (which conflates both) - only words that specifically signal
-// account CREATION are included, so an ordinary login button with e.g. "Continue" never matches.
+// Locale-aware word lists for telling account creation apart from ordinary sign in.
 const REGISTER_KEYWORDS = new Set([
   // English
   'register', 'signup', 'join',
@@ -50,19 +61,6 @@ const REGISTER_KEYWORDS = new Set([
 
 /**
  * Best-effort "is this a brand-new-account registration form, not an ordinary login form" check.
- * Used to decide whether the password field's key icon should default to offering the generator
- * (a fresh password) instead of the "fill an existing saved account" picker, even when saved
- * logins for the site already exist (e.g. registering a second account, or re-registering after a
- * previous session already saved a login for this domain - the confirmed real-world case on
- * demoqa.com's "Register to Book Store" form).
- *
- * `isLikelyNewPasswordField` (autocomplete=new-password, or a confirm/repeat sibling field) is
- * checked first and is authoritative when it fires, but it's not sufficient on its own: demoqa's
- * register form (and plenty of real sites) has exactly ONE password field with no autocomplete
- * hint at all. As a second signal we look at the nearest VISIBLE submit-style control's accessible
- * label within the same form scope and classify it by keyword - reusing the same locale-aware
- * word-matching technique as `looksLikeSubmitControl` (see below), just against a register-specific
- * word list instead of the general submit-word list.
  */
 function isLikelyRegisterForm(pw: HTMLInputElement): boolean {
   if (isLikelyNewPasswordField(pw)) return true;
@@ -75,9 +73,7 @@ function isLikelyRegisterForm(pw: HTMLInputElement): boolean {
 
 /** Find the username field associated with a given password field (positional heuristic). */
 function findUsernameField(pw: HTMLInputElement): HTMLInputElement | null {
-  const inputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])'),
-  ).filter(isVisible);
+  const inputs = queryInputsRecursive(document, 'input:not([type="hidden"])').filter(isVisible);
   const pwIdx = inputs.indexOf(pw);
 
   for (const el of inputs) {

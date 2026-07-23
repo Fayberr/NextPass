@@ -98,6 +98,14 @@ async function handle(msg: Msg): Promise<MsgResult> {
         return { ok: true, kind: 'google_auth_result', res };
       }
 
+      case 'link_google':
+        await session.linkGoogle(msg.googleId, msg.googleEmail);
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'unlink_google':
+        await session.unlinkGoogle();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
       case 'list_items':
         return { ok: true, kind: 'items', items: await session.listItems() };
 

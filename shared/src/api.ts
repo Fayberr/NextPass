@@ -100,6 +100,14 @@ export class ApiClient {
     return this.req('POST', '/api/user/update-recovery', payload);
   }
 
+  linkGoogle(payload: { googleId: string; googleEmail: string }): Promise<{ ok: boolean; googleEmail: string }> {
+    return this.req('POST', '/api/user/link-google', payload);
+  }
+
+  unlinkGoogle(): Promise<{ ok: boolean }> {
+    return this.req('POST', '/api/user/unlink-google');
+  }
+
   // --- vault + items ---
   getVault(): Promise<{ vaultId: string; wrappedKeyByMasterPw: string; wrappedKeyByRecovery: string }> {
     return this.req('GET', '/api/vault');

@@ -85,6 +85,7 @@ export interface VaultKeysResponse {
   vaultId: string;
   wrappedKeyByMasterPw: B64;
   wrappedKeyByRecovery: B64;
+  googleEmail?: string | null;
 }
 
 // ---------------------------------------------------------------------------

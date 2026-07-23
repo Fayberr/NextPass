@@ -124,6 +124,13 @@ export class SessionManager {
     await this.hydrate();
     const acct = await getAccount();
     const items = this.vaultKey ? await cacheGetAll() : [];
+    let googleEmail: string | null = null;
+    if (acct && this.vaultKey && navigator.onLine) {
+      try {
+        const v = await this.api(acct).getVault();
+        googleEmail = v.googleEmail ?? null;
+      } catch {}
+    }
     return {
       configured: acct !== null,
       unlocked: this.vaultKey !== null,
@@ -133,6 +140,7 @@ export class SessionManager {
       online: navigator.onLine,
       lastError: this.lastError,
       pendingRecovery: await getPendingRecovery(),
+      googleEmail,
     };
   }
 
@@ -143,6 +151,18 @@ export class SessionManager {
 
   private api(acct: AccountMeta): ApiClient {
     return new ApiClient(acct.serverUrl, acct.deviceToken);
+  }
+
+  async linkGoogle(googleId: string, googleEmail: string): Promise<{ ok: boolean; googleEmail: string }> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    return await this.api(acct).linkGoogle({ googleId, googleEmail });
+  }
+
+  async unlinkGoogle(): Promise<{ ok: boolean }> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    return await this.api(acct).unlinkGoogle();
   }
 
   async googleAuth(

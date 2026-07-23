@@ -25,6 +25,7 @@ export interface VaultState {
   lastError: string | null;
   /** One-time recovery phrase awaiting the user's acknowledgement (null once saved). */
   pendingRecovery: string | null;
+  googleEmail?: string | null;
 }
 
 /** Lightweight item summary safe to render in the list (already decrypted names). */
@@ -80,6 +81,8 @@ export type Msg =
   | { kind: 'passkey_create'; req: PasskeyCreateReq }
   | { kind: 'passkey_get'; req: PasskeyGetReq }
   | { kind: 'google_auth'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
+  | { kind: 'link_google'; googleId: string; googleEmail: string }
+  | { kind: 'unlink_google' }
   | { kind: 'open_unlock_ui' };
 
 export type MsgResult =

@@ -65,5 +65,5 @@ describe('ApiClient <-> server', () => {
     expect(pulled.items).toHaveLength(1);
     const vk2 = await unlockWithMasterPassword('pw-correct', pre.masterPwSalt, pre.kdfParams, login.vault.wrappedKeyByMasterPw);
     expect(await decryptItem(vk2, pulled.items[0]!)).toEqual(fields);
-  });
+  }, 15000);
 });

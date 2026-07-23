@@ -34,16 +34,28 @@ export async function vaultRoutes(app: FastifyInstance, { db }: { db: DB }): Pro
     `UPDATE vaults SET wrapped_key_by_recovery = @r, updated_at = @now WHERE user_id = @user_id`
   );
 
+  const getUserById = db.prepare('SELECT google_email FROM users WHERE id = ?');
+  const findUserByGoogle = db.prepare('SELECT id FROM users WHERE google_id = ?');
+  const linkGoogleUser = db.prepare(
+    'UPDATE users SET google_id = @google_id, google_email = @google_email, updated_at = @now WHERE id = @id'
+  );
+  const unlinkGoogleUser = db.prepare(
+    'UPDATE users SET google_id = NULL, google_email = NULL, updated_at = @now WHERE id = @id'
+  );
+
   app.get('/api/vault', async (request, reply) => {
     const row = getVault.get(request.auth!.vaultId) as {
       id: string;
+      user_id: string;
       wrapped_key_by_master_pw: Buffer;
       wrapped_key_by_recovery: Buffer;
     };
+    const userRow = getUserById.get(row.user_id) as { google_email: string | null } | undefined;
     const res: VaultKeysResponse = {
       vaultId: row.id,
       wrappedKeyByMasterPw: row.wrapped_key_by_master_pw.toString('base64'),
       wrappedKeyByRecovery: row.wrapped_key_by_recovery.toString('base64'),
+      googleEmail: userRow?.google_email ?? null,
     };
     return reply.send(res);
   });
@@ -84,6 +96,39 @@ export async function vaultRoutes(app: FastifyInstance, { db }: { db: DB }): Pro
     updateRecovery.run({
       user_id: request.auth.userId,
       r: b64(wrappedKeyByRecovery),
+      now,
+    });
+    return reply.send({ ok: true });
+  });
+
+  // --- POST /api/user/link-google -----------------------------------------
+  app.post('/api/user/link-google', async (request, reply) => {
+    if (!request.auth) return reply.code(401).send({ error: 'unauthorized' });
+    const { googleId, googleEmail } = request.body as { googleId: string; googleEmail: string };
+    if (!googleId || !googleEmail) return reply.code(400).send({ error: 'missing googleId or googleEmail' });
+    const lowerEmail = googleEmail.trim().toLowerCase();
+
+    const existing = findUserByGoogle.get(googleId) as { id: string } | undefined;
+    if (existing && existing.id !== request.auth.userId) {
+      return reply.code(409).send({ error: 'This Google Account is already linked to another vault.' });
+    }
+
+    const now = Date.now();
+    linkGoogleUser.run({
+      id: request.auth.userId,
+      google_id: googleId,
+      google_email: lowerEmail,
+      now,
+    });
+    return reply.send({ ok: true, googleEmail: lowerEmail });
+  });
+
+  // --- POST /api/user/unlink-google ---------------------------------------
+  app.post('/api/user/unlink-google', async (request, reply) => {
+    if (!request.auth) return reply.code(401).send({ error: 'unauthorized' });
+    const now = Date.now();
+    unlinkGoogleUser.run({
+      id: request.auth.userId,
       now,
     });
     return reply.send({ ok: true });

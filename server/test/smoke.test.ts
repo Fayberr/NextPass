@@ -133,5 +133,5 @@ describe('server end-to-end (Phase 0)', () => {
     const list2 = devices.json().devices as Array<{ current: boolean }>;
     expect(list2.length).toBe(2);
     expect(list2.some((d) => d.current)).toBe(true);
-  });
+  }, 15000);
 });

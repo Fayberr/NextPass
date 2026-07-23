@@ -1,4 +1,4 @@
-# android/ — placeholder
+# android/ - placeholder
 
 Native Kotlin app. **Phase 6 (deliberately last.)** Crypto reimplemented per the `shared/`
 spec (no code sharing possible). `CredentialProviderService` (Android 14+ Credential Manager)

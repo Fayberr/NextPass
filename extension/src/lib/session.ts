@@ -1,5 +1,5 @@
 /**
- * SessionManager — lives in the background service worker. Owns the in-memory vault key and
+ * SessionManager - lives in the background service worker. Owns the in-memory vault key and
  * mediates every crypto operation. UI surfaces talk to it only via messages; the vault key
  * never leaves this module.
  */
@@ -70,7 +70,7 @@ const VAULT_KEY_KEY = 'vaultKey';
  * The unlocked vault key is mirrored into chrome.storage.session so it survives service-worker
  * teardown (MV3 recycles the idle worker after ~30s, which would otherwise silently re-lock the
  * vault mid-passkey-ceremony). storage.session is in-memory only, never written to disk, and
- * auto-cleared when the browser closes — the same lifetime as holding it in worker memory, just
+ * auto-cleared when the browser closes - the same lifetime as holding it in worker memory, just
  * durable across worker restarts. It is NOT readable by content scripts (trusted contexts only).
  */
 async function getStoredKey(): Promise<Uint8Array | null> {
@@ -86,7 +86,7 @@ async function setStoredKey(key: Uint8Array | null): Promise<void> {
 /**
  * The one-time recovery phrase lives in chrome.storage.session (in-memory, survives service-worker
  * teardown, auto-cleared when the browser closes) so it isn't lost if the popup is closed/reopened
- * — or the SW recycled — before the user confirms they saved it. It is never written to disk.
+ * - or the SW recycled - before the user confirms they saved it. It is never written to disk.
  */
 async function getPendingRecovery(): Promise<string | null> {
   const v = await chrome.storage.session.get(PENDING_RECOVERY_KEY);
@@ -216,7 +216,7 @@ export class SessionManager {
   /** Offline-capable unlock using the locally-stored wrapped vault key. */
   async unlock(password: string): Promise<void> {
     const acct = await getAccount();
-    if (!acct) throw new Error('No account on this device — register or log in first.');
+    if (!acct) throw new Error('No account on this device - register or log in first.');
     try {
       this.vaultKey = await unlockWithMasterPassword(
         password,
@@ -298,7 +298,7 @@ export class SessionManager {
     await patchAccount({ wrappedKeyByRecovery: toB64(wrappedKeyByRecovery) });
 
     const text = [
-      `NextPass — 12-Word Recovery Phrase`,
+      `NextPass - 12-Word Recovery Phrase`,
       `==================================`,
       ``,
       `Account: ${acct.identifier}`,
@@ -687,7 +687,7 @@ export class SessionManager {
     for (const r of records) {
       if (r.deletedAt) continue;
       const { fields } = await this.decryptRecord(r);
-      // Card numbers/secrets never leak into the list subtitle — only a masked last-4 hint for
+      // Card numbers/secrets never leak into the list subtitle - only a masked last-4 hint for
       // cards. Notes intentionally show no subtitle (the body may be sensitive).
       const cardNumber = (fields.number as string) ?? '';
       out.push({
@@ -703,7 +703,7 @@ export class SessionManager {
           (r.type === 'card' && cardNumber ? `•••• ${cardNumber.slice(-4)}` : null) ??
           (fields.city as string) ??
           null,
-        // Passkeys don't have a `uris` field (they store `rpId`, the relying-party domain) —
+        // Passkeys don't have a `uris` field (they store `rpId`, the relying-party domain) -
         // synthesize one so the list's favicon lookup (keyed off the first uri) works for them too.
         uris: (fields.uris as string[]) ?? (r.type === 'passkey' && fields.rpId ? [fields.rpId as string] : []),
         favorite: r.favorite,
@@ -961,7 +961,7 @@ export class SessionManager {
     return out;
   }
 
-  /** navigator.credentials.create() — mint a passkey, store it as a vault item, return the attestation. */
+  /** navigator.credentials.create() - mint a passkey, store it as a vault item, return the attestation. */
   async passkeyCreate(req: PasskeyCreateReq): Promise<PasskeyCreateRes> {
     await this.hydrate();
     const key = this.requireKey();
@@ -977,7 +977,7 @@ export class SessionManager {
       userDisplayName: req.userDisplayName,
     });
 
-    const label = req.userName ? `${req.rpId} — ${req.userName}` : req.rpId;
+    const label = req.userName ? `${req.rpId} - ${req.userName}` : req.rpId;
     const fields: PasskeyFields = {
       name: label,
       rpId: req.rpId,
@@ -1020,7 +1020,7 @@ export class SessionManager {
       }));
   }
 
-  /** navigator.credentials.get() — find a matching passkey, sign the assertion, bump the counter. */
+  /** navigator.credentials.get() - find a matching passkey, sign the assertion, bump the counter. */
   async passkeyGet(req: PasskeyGetReq): Promise<PasskeyGetRes> {
     await this.hydrate();
     const key = this.requireKey();
@@ -1050,7 +1050,7 @@ export class SessionManager {
 
     // Persist the incremented signature counter (clone-detection hygiene). This is BEST-EFFORT:
     // the assertion above is already valid and complete, so a failure to reach the server here
-    // (or any persistence hiccup) must NOT abort the sign-in — otherwise a transient network blip
+    // (or any persistence hiccup) must NOT abort the sign-in - otherwise a transient network blip
     // turns a good passkey login into "Authentication failed / Failed to fetch". We try to save,
     // and on failure just log and return the assertion; the counter re-syncs on the next success.
     try {
@@ -1097,7 +1097,7 @@ export class SessionManager {
   }
 
   /** All saved autofill_identity items, decrypted. Unlike autofillQuery() (login) there's no
-   *  URL/matchMode filtering — identities aren't tied to a site, so every saved identity is
+   *  URL/matchMode filtering - identities aren't tied to a site, so every saved identity is
    *  always offered, letting the content script's picker do the choosing (same as passwords). */
   async identityQuery(): Promise<AutofillIdentityMatch[]> {
     await this.hydrate();
@@ -1126,7 +1126,7 @@ export class SessionManager {
     return matches;
   }
 
-  /** All saved bank cards, decrypted. No URL/matchMode filtering — same rationale as identityQuery(). */
+  /** All saved bank cards, decrypted. No URL/matchMode filtering - same rationale as identityQuery(). */
   async cardQuery(): Promise<AutofillCardMatch[]> {
     await this.hydrate();
     if (!this.vaultKey) return [];

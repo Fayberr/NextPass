@@ -4,7 +4,7 @@ import { ArrowLeft, Eye, EyeOff } from '../icons.js';
 import { send } from '../client.js';
 import type { CardFields } from '@pm/shared';
 
-/** Add OR edit a bank card. Storage + manual copy only — real checkout autofill is capped by
+/** Add OR edit a bank card. Storage + manual copy only - real checkout autofill is capped by
  *  cross-origin payment iframes (Stripe/Adyen/PayPal) a content script can't reach into, so
  *  this is intentionally scoped to "store it, view/copy fields" for now. */
 export function AddCard({

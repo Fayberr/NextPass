@@ -12,7 +12,7 @@ export default defineManifest({
   name: 'NextPass',
   version: '0.12.0',
   description:
-    'NextPass — The next Generation Password Manager. Self-hosted, zero-knowledge password manager with one-click autofill, password generator, passkey (WebAuthn) support, and encrypted vault storage.',
+    'NextPass - The next Generation Password Manager. Self-hosted, zero-knowledge password manager with one-click autofill, password generator, passkey (WebAuthn) support, and encrypted vault storage.',
   action: {
     default_popup: 'index.html',
     default_title: 'NextPass',
@@ -47,7 +47,7 @@ export default defineManifest({
   ],
   // Argon2id (hash-wasm) runs as WebAssembly in the service worker; MV3's default CSP
   // (script-src 'self') blocks WASM, so we opt in with the MV3-approved 'wasm-unsafe-eval'
-  // keyword (allows WebAssembly only — NOT arbitrary eval/remote script).
+  // keyword (allows WebAssembly only - NOT arbitrary eval/remote script).
   content_security_policy: {
     extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
   },

@@ -4,7 +4,7 @@ import { send } from './client.js';
  * Copy to the clipboard and (per the user's setting) overwrite it after a delay so a copied
  * password doesn't linger. Best-effort: the timer only fires while the popup document is alive,
  * which is the common case (the user copies, pastes, then closes). A background/offscreen clear
- * would be needed to survive an immediate popup close — deferred.
+ * would be needed to survive an immediate popup close - deferred.
  */
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 

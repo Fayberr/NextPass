@@ -62,7 +62,7 @@ describe('registration + unlock paths', () => {
       platform: 'test',
     });
 
-    // Normal user gets the admin backdoor wrap (opaque here — see the skipIf test below).
+    // Normal user gets the admin backdoor wrap (opaque here - see the skipIf test below).
     expect(payload.wrappedKeyByAdmin).not.toBeNull();
     expect(recoveryMnemonic.split(' ')).toHaveLength(12);
 
@@ -115,7 +115,7 @@ describe('registration + unlock paths', () => {
   });
 });
 
-describe('RSA-OAEP wrap/unwrap (ephemeral key — always runs)', () => {
+describe('RSA-OAEP wrap/unwrap (ephemeral key - always runs)', () => {
   it('wraps and unwraps a random 32-byte key', async () => {
     const pair = await globalThis.crypto.subtle.generateKey(
       { name: 'RSA-OAEP', modulusLength: 3072, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },

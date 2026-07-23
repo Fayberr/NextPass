@@ -1,6 +1,6 @@
 /**
  * Typed message protocol between UI surfaces (popup, content script) and the background
- * service worker. The vault key NEVER crosses this boundary — the background holds it in
+ * service worker. The vault key NEVER crosses this boundary - the background holds it in
  * memory and only ever returns decrypted field data on explicit request.
  */
 
@@ -142,7 +142,7 @@ export interface PasskeyGetRes {
 
 /**
  * Sent from the background to a tab's content script (separate channel from the popup protocol)
- * to (a) obtain the page's true origin — the webAuthenticationProxy events don't include it — and
+ * to (a) obtain the page's true origin - the webAuthenticationProxy events don't include it - and
  * (b) show the in-page approval prompt for a passkey ceremony.
  */
 export interface WaPromptPasskey {
@@ -173,7 +173,7 @@ export interface AutofillMatch {
 }
 
 /** A saved autofill_identity item, decrypted, offered to the content script's identity-field
- *  autofill (name/address/phone-style checkout & registration fields — not password matching, so
+ *  autofill (name/address/phone-style checkout & registration fields - not password matching, so
  *  there's no URL/matchMode filtering: all saved identities are always offered, same as Bitwarden). */
 export interface AutofillIdentityMatch {
   id: string;
@@ -191,7 +191,7 @@ export interface AutofillIdentityMatch {
 }
 
 /** A saved bank card, decrypted, offered to the content script's card-field autofill (checkout
- *  forms). No URL/matchMode filtering, same as identities — every saved card is always offered. */
+ *  forms). No URL/matchMode filtering, same as identities - every saved card is always offered. */
 export interface AutofillCardMatch {
   id: string;
   name: string;

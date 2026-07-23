@@ -1,5 +1,5 @@
 /**
- * Plaintext item field shapes — the structured JSON that lives INSIDE the encrypted blob.
+ * Plaintext item field shapes - the structured JSON that lives INSIDE the encrypted blob.
  * The server never sees these; only clients, after unlock.
  */
 
@@ -65,7 +65,7 @@ export interface TotpFields {
   notes?: string;
 }
 
-/** A freeform secure note — plain text body, no autofill/matching semantics. */
+/** A freeform secure note - plain text body, no autofill/matching semantics. */
 export interface NoteFields {
   name: string;
   body: string;
@@ -73,7 +73,7 @@ export interface NoteFields {
 
 /** A WebAuthn/FIDO2 passkey stored in the vault (Phase 2). Private key is PKCS#8, base64. */
 export interface PasskeyFields {
-  name: string; // display, e.g. "github.com — user@example.com"
+  name: string; // display, e.g. "github.com - user@example.com"
   rpId: string;
   rpName?: string;
   userHandle: string; // base64 (PublicKeyCredentialUserEntity.id)

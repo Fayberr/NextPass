@@ -20,7 +20,7 @@ const changePasswordSchema = z.object({
 
 const b64 = (s: string) => Buffer.from(s, 'base64');
 
-/** GET /api/vault — the caller's wrapped vault-key blobs (for unlock on an already-paired device). */
+/** GET /api/vault - the caller's wrapped vault-key blobs (for unlock on an already-paired device). */
 export async function vaultRoutes(app: FastifyInstance, { db }: { db: DB }): Promise<void> {
   const getVault = db.prepare('SELECT * FROM vaults WHERE id = ?');
 

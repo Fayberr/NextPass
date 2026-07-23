@@ -16,7 +16,7 @@
  * each block and figures out the record from whichever keys are present, so it doesn't need to
  * know about "Websites" / "Applications" / "Other Accounts" headers at all.
  *
- * Pure and synchronous — no chrome APIs, no network. Deliberately does NOT touch the vault key or
+ * Pure and synchronous - no chrome APIs, no network. Deliberately does NOT touch the vault key or
  * do any encryption; that only happens inside the popup's unlocked session (see Import.tsx),
  * because this is a zero-knowledge vault.
  */
@@ -45,7 +45,7 @@ function normalizeText(text: string): string {
 }
 
 /** Split the export into "---"-delimited blocks. Section headers (e.g. a lone "Websites" line)
- *  just ride along inside whichever block they precede — they don't match the KV regexes below,
+ *  just ride along inside whichever block they precede - they don't match the KV regexes below,
  *  so they're harmlessly ignored rather than needing special-case handling. */
 function splitBlocks(text: string): string[][] {
   const lines = normalizeText(text).split('\n');
@@ -89,7 +89,7 @@ function looksLikeRealHost(hostname: string): boolean {
 
 /** Best-effort "does this look like a real website" check + https:// prefixing. Kaspersky often
  *  stores bare domains ("gmx.net") but sometimes a non-URL app identifier ("txadmin") under the
- *  same "Website URL" key — only the former should become an autofill-matchable URI. */
+ *  same "Website URL" key - only the former should become an autofill-matchable URI. */
 function normalizeUrl(raw: string): string | null {
   const v = raw.trim();
   if (!v) return null;
@@ -105,13 +105,13 @@ function normalizeUrl(raw: string): string | null {
 }
 
 /**
- * Deliberately uses the exact hostname, NOT the base domain — even though items themselves get
+ * Deliberately uses the exact hostname, NOT the base domain - even though items themselves get
  * matchMode 'base_domain' for autofill purposes (see blockToEntry). Two different subdomains of
  * the same site with the same username (e.g. nextcloud.fayber.dev and ai.fayber.dev, both user
  * "fayber") are genuinely distinct accounts, not duplicates; collapsing on base domain here was
  * caught during testing (it silently ate 3 of 4 real *.fayber.dev logins) and would have dropped
  * real passwords. A false NEGATIVE (importing an actual duplicate twice) is the safe failure mode
- * for a one-shot import — the user can merge/delete afterward — a false positive is not.
+ * for a one-shot import - the user can merge/delete afterward - a false positive is not.
  */
 function dedupeKeyFor(uris: string[], identifier: string, name: string): string {
   let host = '';
@@ -135,7 +135,7 @@ function blockToEntry(kv: KV[]): ParsedImportEntry | null {
   let password: string | undefined;
   let comment: string | undefined;
   // Freeform extras (e.g. "Client ID"/"Client Secret" in Kaspersky's "Other Accounts") get folded
-  // into notes rather than LoginFields.customFields — the UI doesn't render customFields anywhere
+  // into notes rather than LoginFields.customFields - the UI doesn't render customFields anywhere
   // yet (no edit form, no detail view), so anything put there would be saved but invisible.
   const extra: { key: string; value: string }[] = [];
 
@@ -206,7 +206,7 @@ export function parseKasperskyExport(text: string): ParseResult {
   let skipped = 0;
   for (const block of blocks) {
     const kv = parseKv(block);
-    if (kv.length === 0) continue; // pure section-header/blank block — not a real record
+    if (kv.length === 0) continue; // pure section-header/blank block - not a real record
     const entry = blockToEntry(kv);
     if (entry) entries.push(entry);
     else skipped++;

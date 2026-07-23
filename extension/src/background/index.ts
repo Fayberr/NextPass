@@ -35,8 +35,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   })();
 });
 
-// Become THE authoritative WebAuthn authority whenever the extension is installed — even before the
-// vault is set up and even while it is locked — so passkey ceremonies never fall through to Windows
+// Become THE authoritative WebAuthn authority whenever the extension is installed - even before the
+// vault is set up and even while it is locked - so passkey ceremonies never fall through to Windows
 // Hello. A not-ready request pops our window to register/log in/unlock first (WebAuthnProxy
 // .ensureReady). We deliberately do NOT detach on lock/forget: staying attached is what guarantees
 // interception on the very next ceremony.

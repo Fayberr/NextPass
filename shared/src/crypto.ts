@@ -3,7 +3,7 @@
  *
  * Runs unchanged in Node 20+ and in browsers: everything goes through the standard WebCrypto
  * SubtleCrypto API (`globalThis.crypto.subtle`), except Argon2id which is not in WebCrypto and
- * is provided by `hash-wasm` (WASM — also runs both sides).
+ * is provided by `hash-wasm` (WASM - also runs both sides).
  *
  * Conventions:
  *   - Symmetric:  AES-256-GCM. Wrapped output layout = `iv(12) ‖ ciphertext ‖ tag(16)`.

@@ -1,5 +1,5 @@
 /**
- * Minimal CBOR *encoder* — just enough for WebAuthn (attestationObject + COSE public keys).
+ * Minimal CBOR *encoder* - just enough for WebAuthn (attestationObject + COSE public keys).
  * WebAuthn never needs us to decode CBOR (clientDataJSON is JSON; assertion responses are raw
  * bytes), so a tiny dependency-free encoder beats pulling in a full CBOR library.
  *

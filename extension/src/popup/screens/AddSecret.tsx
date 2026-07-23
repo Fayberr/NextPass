@@ -6,7 +6,7 @@ import { copyWithClear } from '../clipboard.js';
 import type { SecretFields } from '@pm/shared';
 
 /**
- * Add OR edit a designated API key / secret — a flexible name+value pair for API keys, SSH
+ * Add OR edit a designated API key / secret - a flexible name+value pair for API keys, SSH
  * keys, license codes, Wi-Fi passwords, etc. No autofill/matching semantics (unlike logins).
  */
 export function AddSecret({

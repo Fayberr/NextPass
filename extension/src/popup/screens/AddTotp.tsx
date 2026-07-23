@@ -6,7 +6,7 @@ import { isValidTotp, parseOtpauth, type TotpFields } from '@pm/shared';
 import { TotpCode } from '../TotpCode.js';
 
 /**
- * Add OR edit a standalone authenticator (TOTP) entry — a code not tied to a stored login,
+ * Add OR edit a standalone authenticator (TOTP) entry - a code not tied to a stored login,
  * like Google Authenticator. Accepts an otpauth:// URI (auto-fills name/issuer/account) or a
  * bare base32 secret.
  */

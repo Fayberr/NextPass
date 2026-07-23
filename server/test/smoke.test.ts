@@ -88,7 +88,7 @@ describe('server end-to-end (Phase 0)', () => {
     const created = createRes.json<ItemRecord>();
     expect(created.itemKeyWrappedByAutomationPubkey).not.toBeNull();
 
-    // server stored only ciphertext — verify by decrypting back to the original fields
+    // server stored only ciphertext - verify by decrypting back to the original fields
     expect(await decryptItem(vaultKey, created)).toEqual(fields);
 
     // --- list + fetch ---

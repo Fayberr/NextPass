@@ -1,4 +1,4 @@
-/** @pm/shared — portable crypto + API types for the password manager. */
+/** @pm/shared - portable crypto + API types for the password manager. */
 
 export * from './crypto.js';
 export * from './keys.js';

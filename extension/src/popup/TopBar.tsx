@@ -1,6 +1,6 @@
 /**
  * Persistent top bar: search (only meaningful on list screens), manual lock, and a "⋮" overflow
- * menu holding Sync / Password Health / Settings — Kaspersky keeps these behind a menu rather
+ * menu holding Sync / Password Health / Settings - Kaspersky keeps these behind a menu rather
  * than as permanent rail icons, and doing the same here keeps the rail limited to real item
  * categories.
  */

@@ -75,7 +75,7 @@ export function Unlock({
       }
       if (!res.ok) throw new Error(res.error);
       if (res.kind === 'state') {
-        // Successful submit — clear the saved draft. (If registering, App now routes to the
+        // Successful submit - clear the saved draft. (If registering, App now routes to the
         // recovery screen because res.state.pendingRecovery is set.)
         await chrome.storage.session.remove(DRAFT_KEY);
         onUnlocked(res.state);
@@ -139,7 +139,7 @@ export function Unlock({
         <h1 className="text-xl font-semibold tracking-tight">NextPass</h1>
         <p className="mt-1 text-xs text-white/40">
           {showRecoveryMode
-            ? 'Vault Recovery — 12-Word Phrase'
+            ? 'Vault Recovery - 12-Word Phrase'
             : configured
             ? 'Enter your master password to unlock'
             : 'The next Generation Password Manager'}

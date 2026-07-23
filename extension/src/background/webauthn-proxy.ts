@@ -1,5 +1,5 @@
 /**
- * chrome.webAuthenticationProxy integration — makes this extension the AUTHORITATIVE WebAuthn
+ * chrome.webAuthenticationProxy integration - makes this extension the AUTHORITATIVE WebAuthn
  * provider at the browser level, so passkey ceremonies route to our vault instead of the platform
  * authenticator or a competing extension (e.g. Kaspersky).
  *
@@ -9,7 +9,7 @@
  * native path so nothing else can intercept ahead of us.
  *
  * We attach whenever the extension is installed (see background/index.ts) so we are THE provider on
- * this browser even before the vault is set up or while it is locked — a ceremony then opens our
+ * this browser even before the vault is set up or while it is locked - a ceremony then opens our
  * window to register/log in/unlock (ensureReady) instead of falling through to Windows Hello.
  */
 
@@ -96,7 +96,7 @@ export class WebAuthnProxy {
         await chrome.action.openPopup();
         return;
       } catch {
-        // e.g. no active window / not permitted — fall back to a standalone window.
+        // e.g. no active window / not permitted - fall back to a standalone window.
       }
     }
     await this.openUnlockWindow();

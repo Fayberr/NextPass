@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Password Manager — Chrome/Opera GX MV3 extension (Phase 1 MVP: login items, master-password unlock, sync, basic autofill).",
+  "description": "Password Manager - Chrome/Opera GX MV3 extension (Phase 1 MVP: login items, master-password unlock, sync, basic autofill).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

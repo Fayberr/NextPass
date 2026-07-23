@@ -1,7 +1,7 @@
 /**
  * Embedded RSA-3072 PUBLIC keys (SPKI, base64/DER).
  *
- * These are safe to ship in client code — they are public keys. The matching PRIVATE keys
+ * These are safe to ship in client code - they are public keys. The matching PRIVATE keys
  * live OUTSIDE this repo (git-ignored, `../password-manager-secrets/`) and are never sent to
  * the server:
  *

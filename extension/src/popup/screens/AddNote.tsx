@@ -4,7 +4,7 @@ import { ArrowLeft } from '../icons.js';
 import { send } from '../client.js';
 import type { NoteFields } from '@pm/shared';
 
-/** Add OR edit a freeform general note — plain text body, no autofill/matching semantics. */
+/** Add OR edit a freeform general note - plain text body, no autofill/matching semantics. */
 export function AddNote({
   onDone,
   onCancel,

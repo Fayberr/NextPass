@@ -1,6 +1,6 @@
 /**
  * Shared API + domain types. Used by the server and (later) every client.
- * The server treats all encrypted fields as opaque base64 blobs — it never sees plaintext.
+ * The server treats all encrypted fields as opaque base64 blobs - it never sees plaintext.
  */
 
 import type { KdfParams } from './crypto.js';
@@ -20,7 +20,7 @@ export interface RegistrationPayload {
   isAdmin: boolean;
   masterPwSalt: B64;
   kdfParams: KdfParams;
-  /** SHA-256(authKey) — server stores this to verify future logins. */
+  /** SHA-256(authKey) - server stores this to verify future logins. */
   authKeyHash: B64;
   wrappedKeyByMasterPw: B64;
   /** Present for every normal user (admin backdoor); omitted for the admin's own account. */
@@ -33,7 +33,7 @@ export interface DeviceRegistration {
   platform: string;
 }
 
-/** Local-only result of registration — the recovery phrase is shown ONCE and never stored. */
+/** Local-only result of registration - the recovery phrase is shown ONCE and never stored. */
 export interface RegistrationResult {
   payload: RegistrationPayload;
   recoveryMnemonic: string;
@@ -57,7 +57,7 @@ export interface LoginPayload {
 export interface AuthResponse {
   userId: string;
   deviceId: string;
-  /** Bearer token — shown once, stored only hashed server-side. */
+  /** Bearer token - shown once, stored only hashed server-side. */
   deviceToken: string;
   vault: VaultKeysResponse;
 }

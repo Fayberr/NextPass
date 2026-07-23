@@ -42,7 +42,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  /* Custom checkbox — native checkboxes render in the OS theme and clash with the dark-violet
+  /* Custom checkbox - native checkboxes render in the OS theme and clash with the dark-violet
      glass UI, so we fully restyle: rounded box, violet fill + white check when selected. */
   .pm-check {
     -webkit-appearance: none;
@@ -84,7 +84,7 @@
     outline-offset: 2px;
   }
 
-  /* Custom range slider — themed track + thumb across WebKit/Firefox. */
+  /* Custom range slider - themed track + thumb across WebKit/Firefox. */
   .pm-range {
     -webkit-appearance: none;
     appearance: none;

@@ -1,8 +1,8 @@
-# extension/ — Chrome / Opera GX MV3 extension
+# extension/ - Chrome / Opera GX MV3 extension
 
 **Phase 1 MVP (built):** master-password unlock, register/login, encrypted vault list, item
 detail with copy/reveal, add-login form, cursor-based sync, offline IndexedDB cache, and basic
-autofill. Consumes `@pm/shared` for all crypto + API — the vault key is derived and held only in
+autofill. Consumes `@pm/shared` for all crypto + API - the vault key is derived and held only in
 the background service worker's memory and never crosses into the popup or content script.
 
 **Later:** Phase 2 (passkey main-world shim + virtual FIDO2 authenticator), Phase 3 (full
@@ -15,7 +15,7 @@ src/
 ├── manifest.config.ts      # MV3 manifest (crxjs defineManifest)
 ├── background/index.ts      # service worker: message router → SessionManager
 ├── lib/
-│   ├── session.ts           # SessionManager — owns the in-memory vault key + all crypto ops
+│   ├── session.ts           # SessionManager - owns the in-memory vault key + all crypto ops
 │   ├── config.ts            # account meta in chrome.storage.local (no plaintext keys)
 │   ├── storage.ts           # encrypted item cache in IndexedDB (idb)
 │   └── messages.ts          # typed popup/content ↔ background protocol

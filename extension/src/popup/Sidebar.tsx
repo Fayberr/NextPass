@@ -1,6 +1,6 @@
 /**
  * Persistent left icon-rail, Kaspersky-style category switcher. Each icon maps to a real,
- * already-implemented item type (`login`/`totp`/`passkey`) or a cross-type favorite filter —
+ * already-implemented item type (`login`/`totp`/`passkey`) or a cross-type favorite filter -
  * we deliberately don't stub categories (bank cards, addresses) that have no backing data model.
  * Generator is a standalone tool, not a filtered list, so it gets its own button below a divider.
  */

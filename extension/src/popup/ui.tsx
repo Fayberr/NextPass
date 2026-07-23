@@ -168,7 +168,7 @@ export interface SelectOption<T> {
 }
 
 /**
- * Themed dropdown replacing native <select> — the native option list can't be styled
+ * Themed dropdown replacing native <select> - the native option list can't be styled
  * cross-browser (it renders in the OS light theme, clashing with our dark glass UI). The menu
  * is positioned `fixed` from the trigger's rect so it escapes the popup's overflow-clipped
  * scroll container, and it flips upward if there isn't room below.

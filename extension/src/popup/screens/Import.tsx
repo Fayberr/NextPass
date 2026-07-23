@@ -11,7 +11,7 @@ import {
 /**
  * Import screen: paste or upload a Kaspersky Password Manager plaintext export, parse it
  * client-side, dedupe against what's already in the vault, then create each new item through the
- * normal `create_login` message — same encrypted-item-creation path as the manual "Add login"
+ * normal `create_login` message - same encrypted-item-creation path as the manual "Add login"
  * form. This has to happen here (inside an unlocked popup session) rather than as a CLI/server
  * script: the vault is zero-knowledge, so encryption only ever happens with the vault key that
  * lives in the background worker's memory while unlocked.
@@ -46,7 +46,7 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     }
     const { entries, skipped } = parseKasperskyExport(text);
     if (entries.length === 0) {
-      setError("No entries found — check this matches Kaspersky's plaintext export format.");
+      setError("No entries found - check this matches Kaspersky's plaintext export format.");
       return;
     }
     setBusy(true);
@@ -58,7 +58,7 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     const dupeKeys = new Set(entries.filter((e) => existingKeys.has(e.key)).map((e) => e.key));
     setBusy(false);
     setStage({ name: 'preview', entries, dupeKeys, skippedBlocks: skipped });
-    setText(''); // the structured entries are all we need from here — drop the raw plaintext blob
+    setText(''); // the structured entries are all we need from here - drop the raw plaintext blob
   }
 
   async function runImport() {
@@ -90,7 +90,7 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
             <p className="mb-3 text-xs leading-relaxed text-white/50">
               Paste the contents of a Kaspersky Password Manager plaintext export below, or choose
               the exported <span className="font-mono text-white/70">.txt</span> file. Nothing
-              leaves your device — parsing happens here, and each item is saved the same way as a
+              leaves your device - parsing happens here, and each item is saved the same way as a
               manually-added login.
             </p>
             <label className="mb-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[rgba(255,255,255,0.15)] bg-white/[0.03] py-3 text-sm text-white/60 hover:bg-white/[0.06]">

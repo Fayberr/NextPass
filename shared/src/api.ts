@@ -1,5 +1,5 @@
 /**
- * Thin typed HTTP client for the server API. No crypto here — callers pass already-wrapped
+ * Thin typed HTTP client for the server API. No crypto here - callers pass already-wrapped
  * blobs (built with `register.ts` / `vault.ts`). Works in the browser and in Node (global fetch).
  */
 

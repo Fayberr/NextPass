@@ -1,6 +1,6 @@
-# NextPass — The next Generation Password Manager 🔒
+# NextPass - The next Generation Password Manager 🔒
 
-Self-hosted, zero-knowledge password manager with automatic WebAuthn Passkey interception, one-click autofill, TOTP codes, bank cards, identities, secrets, and encrypted vault backup/import. Built from scratch — **not** a Vaultwarden fork.
+Self-hosted, zero-knowledge password manager with automatic WebAuthn Passkey interception, one-click autofill, TOTP codes, bank cards, identities, secrets, and encrypted vault backup/import. Built from scratch - **not** a Vaultwarden fork.
 
 Full design & specification lives in the shared brain vault: `~/brain/projects/password-manager.md`.
 
@@ -8,9 +8,9 @@ Full design & specification lives in the shared brain vault: `~/brain/projects/p
 
 | Workspace | Stack | Description / Status |
 |---|---|---|
-| `shared/` | TS crypto + API types | **Phase 0 & 1 (Built)** — WebCrypto, Argon2id (WASM), BIP39 12-word recovery, AES-256-GCM, RSA-OAEP-4096 |
-| `server/` | Node.js + Fastify + SQLite | **Phase 0 (Deployed)** — Fastify REST API, SQLite (`pm.db`), systemd service (`password-manager-server.service`) |
-| `extension/` | Manifest V3 (Chrome / Edge / Opera GX) | **Phase 1 & 2 (Built & Deployed)** — React 18, Vite 5, Tailwind CSS, WebAuthn Proxy Shim, Purge Vault, Backup Import/Export |
+| `shared/` | TS crypto + API types | **Phase 0 & 1 (Built)** - WebCrypto, Argon2id (WASM), BIP39 12-word recovery, AES-256-GCM, RSA-OAEP-4096 |
+| `server/` | Node.js + Fastify + SQLite | **Phase 0 (Deployed)** - Fastify REST API, SQLite (`pm.db`), systemd service (`password-manager-server.service`) |
+| `extension/` | Manifest V3 (Chrome / Edge / Opera GX) | **Phase 1 & 2 (Built & Deployed)** - React 18, Vite 5, Tailwind CSS, WebAuthn Proxy Shim, Purge Vault, Backup Import/Export |
 | `desktop/` | Electron | Phase 5 (Scaffold / Planned) |
 | `android/` | Kotlin (Native) | Phase 6 (Planned) |
 

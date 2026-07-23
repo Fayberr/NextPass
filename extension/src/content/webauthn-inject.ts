@@ -30,6 +30,6 @@
       });
     }
   } catch {
-    /* another guard already locked these, or the engine disallows it — nothing to do. */
+    /* another guard already locked these, or the engine disallows it - nothing to do. */
   }
 })();

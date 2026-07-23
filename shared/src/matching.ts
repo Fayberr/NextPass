@@ -1,5 +1,5 @@
 /**
- * URI match detection — the deliberate fix for the Kaspersky `*.fayber.dev` collision.
+ * URI match detection - the deliberate fix for the Kaspersky `*.fayber.dev` collision.
  * Default is **Host** (exact hostname), so every subdomain is a separate credential unless the
  * user explicitly opts an item into Base-domain matching.
  */

@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS, type GeneratorDefaults } from '../../lib/settings.js'
 
 /** Standalone password / passphrase generator. Seeds its options from the saved generator
  *  defaults (Settings) and can persist changes back so the inline generators stay in sync.
- *  Reached via the rail (not a drill-down), so the header is a plain title — no back button. */
+ *  Reached via the rail (not a drill-down), so the header is a plain title - no back button. */
 export function Generator({ onBack: _onBack }: { onBack: () => void }) {
   const [g, setG] = useState<GeneratorDefaults>(DEFAULT_SETTINGS.gen);
   const [value, setValue] = useState('');

@@ -1,6 +1,6 @@
 /**
  * Encrypted offline item cache (IndexedDB via idb). Stores the server's `ItemRecord`s
- * verbatim — they are already end-to-end encrypted (opaque ciphertext blobs), so at-rest
+ * verbatim - they are already end-to-end encrypted (opaque ciphertext blobs), so at-rest
  * they stay encrypted. Decryption happens only in memory after unlock.
  */
 

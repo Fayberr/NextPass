@@ -6,7 +6,7 @@ import { send } from '../client.js';
 /**
  * One-time recovery-phrase screen. The phrase is held in the background (chrome.storage.session),
  * so this screen re-appears on popup reopen / service-worker teardown until the user confirms they
- * saved it — it can't be lost by accidentally closing the window.
+ * saved it - it can't be lost by accidentally closing the window.
  */
 export function Recovery({ phrase, identifier, onAcked }: { phrase: string; identifier: string | null; onAcked: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -15,7 +15,7 @@ export function Recovery({ phrase, identifier, onAcked }: { phrase: string; iden
   function fileContent(): string {
     const who = identifier || 'account';
     return [
-      'NextPass — Recovery Phrase',
+      'NextPass - Recovery Phrase',
       '===================================',
       '',
       `Account: ${who}`,
@@ -88,7 +88,7 @@ export function Recovery({ phrase, identifier, onAcked }: { phrase: string; iden
         </Button>
       </div>
       <Button className="w-full" onClick={acknowledge} disabled={busy}>
-        I've saved it — open my vault
+        I've saved it - open my vault
       </Button>
     </div>
   );

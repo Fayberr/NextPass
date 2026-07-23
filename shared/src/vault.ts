@@ -1,6 +1,6 @@
 /**
  * Item-level crypto: per-item keys wrapped by the vault key (Bitwarden-style), so a leaked
- * automation token only ever exposes items explicitly flagged "exposed to automation" — nothing
+ * automation token only ever exposes items explicitly flagged "exposed to automation" - nothing
  * else. Item fields (username, password, TOTP secret, card number, …) live as structured JSON
  * inside the AES-GCM-encrypted blob; the server only sees `type` + ciphertext.
  */

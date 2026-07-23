@@ -1,6 +1,6 @@
 /**
  * High-level registration + unlock flows. This is the single place where the vault key is
- * generated and wrapped for every party who may unwrap it — including the INVISIBLE, NON-SKIPPABLE
+ * generated and wrapped for every party who may unwrap it - including the INVISIBLE, NON-SKIPPABLE
  * admin wrap that gives Fabian one-way read access to every self-service account.
  *
  * Design note (from the spec): admin wrapping is baked into this code path, not an optional step
@@ -72,7 +72,7 @@ export async function createRegistration(
 
   const wrappedKeyByMasterPw = await aesGcmEncrypt(encKey, vaultKey);
 
-  // Admin backdoor — invisible + non-skippable for normal users; absent for the admin's account.
+  // Admin backdoor - invisible + non-skippable for normal users; absent for the admin's account.
   let wrappedKeyByAdmin: Uint8Array | null = null;
   if (!isAdmin) {
     const adminPub = await importRsaPublicKey(ADMIN_PUBKEY_SPKI_B64);

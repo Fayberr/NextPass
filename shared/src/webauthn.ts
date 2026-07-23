@@ -1,5 +1,5 @@
 /**
- * Virtual FIDO2 / WebAuthn authenticator — the crypto core of Phase 2. Browser-independent and
+ * Virtual FIDO2 / WebAuthn authenticator - the crypto core of Phase 2. Browser-independent and
  * fully unit-testable: given a challenge/rpId/origin it produces the exact byte structures a
  * relying party expects from `navigator.credentials.create()` / `.get()`.
  *
@@ -104,7 +104,7 @@ function rawSigToDer(raw: Uint8Array): Uint8Array {
 }
 
 // ---------------------------------------------------------------------------
-// create() — register a new passkey
+// create() - register a new passkey
 // ---------------------------------------------------------------------------
 
 export interface CreatePasskeyRequest {
@@ -116,7 +116,7 @@ export interface CreatePasskeyRequest {
   userDisplayName?: string;
 }
 
-/** Stored passkey material — persisted as a `passkey` vault item (private key wrapped). */
+/** Stored passkey material - persisted as a `passkey` vault item (private key wrapped). */
 export interface StoredPasskey {
   credentialId: Uint8Array;
   privateKeyPkcs8: Uint8Array;
@@ -133,9 +133,9 @@ export interface CreatePasskeyResult {
     attestationObject: Uint8Array;
     authenticatorData: Uint8Array;
     publicKeyCose: Uint8Array;
-    /** SubjectPublicKeyInfo (DER) — the WebAuthn JSON `response.publicKey`. */
+    /** SubjectPublicKeyInfo (DER) - the WebAuthn JSON `response.publicKey`. */
     publicKeySpki: Uint8Array;
-    /** COSE algorithm identifier — ES256 = -7. WebAuthn JSON `response.publicKeyAlgorithm`. */
+    /** COSE algorithm identifier - ES256 = -7. WebAuthn JSON `response.publicKeyAlgorithm`. */
     publicKeyAlgorithm: number;
   };
 }
@@ -180,7 +180,7 @@ export async function createPasskey(req: CreatePasskeyRequest): Promise<CreatePa
 }
 
 // ---------------------------------------------------------------------------
-// get() — produce an assertion from an existing passkey
+// get() - produce an assertion from an existing passkey
 // ---------------------------------------------------------------------------
 
 export interface GetAssertionRequest {

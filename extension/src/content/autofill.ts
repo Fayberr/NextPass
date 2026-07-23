@@ -20,7 +20,7 @@ function isVisible(el: HTMLElement): boolean {
  * Whether a password field looks like a genuine new-password/signup field (safe to auto-open the
  * generator for), rather than an ordinary login field. Many real sites (e.g. demoqa.com) never set
  * `autocomplete` at all, so "not marked current-password" is NOT good enough evidence on its own
- * (that previously caused the generator to pop open on plain login pages) — require POSITIVE proof:
+ * (that previously caused the generator to pop open on plain login pages) - require POSITIVE proof:
  * either an explicit `autocomplete="new-password"`, or a second visible password field in the same
  * scope (a confirm/repeat-password sibling, which login forms never have).
  */
@@ -35,7 +35,7 @@ function isLikelyNewPasswordField(pw: HTMLInputElement): boolean {
 // Locale-aware word lists (same word-run technique as SUBMIT_KEYWORDS/normalizeWords further down,
 // hoisted-function-callable from here since this module is bundled as one top-level scope) for
 // telling a "create a brand-new account" control apart from an ordinary "sign in" one. Deliberately
-// narrower than SUBMIT_KEYWORDS (which conflates both) — only words that specifically signal
+// narrower than SUBMIT_KEYWORDS (which conflates both) - only words that specifically signal
 // account CREATION are included, so an ordinary login button with e.g. "Continue" never matches.
 const REGISTER_KEYWORDS = new Set([
   // English
@@ -53,14 +53,14 @@ const REGISTER_KEYWORDS = new Set([
  * Used to decide whether the password field's key icon should default to offering the generator
  * (a fresh password) instead of the "fill an existing saved account" picker, even when saved
  * logins for the site already exist (e.g. registering a second account, or re-registering after a
- * previous session already saved a login for this domain — the confirmed real-world case on
+ * previous session already saved a login for this domain - the confirmed real-world case on
  * demoqa.com's "Register to Book Store" form).
  *
  * `isLikelyNewPasswordField` (autocomplete=new-password, or a confirm/repeat sibling field) is
  * checked first and is authoritative when it fires, but it's not sufficient on its own: demoqa's
  * register form (and plenty of real sites) has exactly ONE password field with no autocomplete
  * hint at all. As a second signal we look at the nearest VISIBLE submit-style control's accessible
- * label within the same form scope and classify it by keyword — reusing the same locale-aware
+ * label within the same form scope and classify it by keyword - reusing the same locale-aware
  * word-matching technique as `looksLikeSubmitControl` (see below), just against a register-specific
  * word list instead of the general submit-word list.
  */
@@ -132,7 +132,7 @@ async function cardQuery(): Promise<AutofillCardMatch[]> {
 
 /**
  * Whether there's an unlocked vault to autofill/generate against. Without this, a locked vault
- * looks identical to "no saved logins" (autofillQuery returns [] either way) — which used to make
+ * looks identical to "no saved logins" (autofillQuery returns [] either way) - which used to make
  * the picker/generator silently misfire as if this were a brand-new field. Checked before deciding
  * what the badge/focus should show.
  */
@@ -145,12 +145,12 @@ async function vaultReady(): Promise<boolean> {
 
 let pickerHost: HTMLDivElement | null = null;
 let pickerField: HTMLInputElement | null = null;
-// Last-known saved-login matches per password field (populated on focus) — lets the badge decide,
+// Last-known saved-login matches per password field (populated on focus) - lets the badge decide,
 // at click time, whether to open the accounts picker (saved logins exist) or the generator
-// (no saved logins — likely a new/registration field), without re-querying synchronously.
+// (no saved logins - likely a new/registration field), without re-querying synchronously.
 const fieldMatches = new WeakMap<HTMLInputElement, AutofillMatch[]>();
 // Password fields we've already attempted a silent auto-fill for (Kaspersky-style: fill the best
-// match in automatically, no picker interaction required — the icon is only needed to switch
+// match in automatically, no picker interaction required - the icon is only needed to switch
 // accounts). Attempted-but-locked fields are deliberately left unmarked so a later scan/focus can
 // retry once the vault is unlocked; everything else (already has a value, matched, or confirmed
 // empty with no matches) is marked so we never re-query/re-fill on every DOM mutation.
@@ -177,7 +177,7 @@ function closeLockPrompt(): void {
 }
 
 /** Same anchor algorithm as the generator card (positionGen): right of the field if there's room,
- *  else below it, right-aligned — so the lock prompt appears exactly where the generator would. */
+ *  else below it, right-aligned - so the lock prompt appears exactly where the generator would. */
 function anchorCardNextTo(field: HTMLInputElement, width: number): { left: number; top: number } {
   const r = field.getBoundingClientRect();
   const spaceRight = window.innerWidth - r.right;
@@ -242,7 +242,7 @@ function fillWith(pw: HTMLInputElement, m: AutofillMatch): void {
 }
 
 /**
- * Silently fill the best (first) saved match into a field pair, without opening the picker —
+ * Silently fill the best (first) saved match into a field pair, without opening the picker -
  * Kaspersky/Bitwarden-style "just click login". Only ever touches fields that are still empty (an
  * already-typed value, ours or the site's, is never clobbered), and never fires on a likely
  * new-password/signup field (that's the generator's job, not the saved-login autofill's). Runs at
@@ -262,7 +262,7 @@ async function attemptAutoFill(pw: HTMLInputElement, knownMatches?: AutofillMatc
   }
   let matches = knownMatches;
   if (!matches) {
-    if (!(await vaultReady())) return; // locked/unset — leave unmarked, retry on next scan/focus
+    if (!(await vaultReady())) return; // locked/unset - leave unmarked, retry on next scan/focus
     matches = await query();
   }
   autoFillAttempted.add(pw);
@@ -345,7 +345,7 @@ interface Badge {
   // The password field this badge actually operates on. Equal to the badge's own field for a
   // password-field badge; for a username/email companion badge (added so BOTH fields show the icon,
   // Kaspersky-style) it points at the associated password field, since that's what vault reads/writes
-  // and lock/picker/generator state all key off — the badge is just a second entry point to the same
+  // and lock/picker/generator state all key off - the badge is just a second entry point to the same
   // card, anchored at wherever it was clicked.
   pwField: HTMLInputElement;
 }
@@ -386,9 +386,9 @@ function isControlLike(el: Element): boolean {
 /**
  * Measure how much of the field's right edge is already occupied by the site's own controls, so we
  * can slot our badge just to their left instead of covering them. We probe points along the field's
- * vertical centre from the right edge inward with `elementsFromPoint` — that reflects the ACTUAL
+ * vertical centre from the right edge inward with `elementsFromPoint` - that reflects the ACTUAL
  * visual stacking (an overlay eye button sits above the input at that point), independent of DOM
- * structure — and take the leftmost overlapping control's edge. Returns 0 when the edge is clear.
+ * structure - and take the leftmost overlapping control's edge. Returns 0 when the edge is clear.
  */
 function computeRightInset(field: HTMLInputElement): number {
   const r = field.getBoundingClientRect();
@@ -414,7 +414,7 @@ function computeRightInset(field: HTMLInputElement): number {
   return occupied > 2 ? Math.round(occupied) + 4 : 0; // small gap so we sit just left of their control
 }
 
-/** Structural subset of Badge/IdentityBadge — both badge kinds share the same fixed-position host
+/** Structural subset of Badge/IdentityBadge - both badge kinds share the same fixed-position host
  *  element and cached right-inset, so this one positioning routine serves both. */
 function positionBadge(field: HTMLInputElement, badge: { host: HTMLDivElement; inset: number }): void {
   if (!badgeShouldShow(field)) {
@@ -429,7 +429,7 @@ function positionBadge(field: HTMLInputElement, badge: { host: HTMLDivElement; i
 
 /**
  * Create the persistent badge for a field if it doesn't have one yet. `pwField` is the password
- * field this badge's card should actually operate on/anchor state to — defaults to `field` itself
+ * field this badge's card should actually operate on/anchor state to - defaults to `field` itself
  * (a password-field badge); pass the password field explicitly when adding a companion badge to a
  * username/email field so both icons drive the same underlying lock/picker/generator state.
  */
@@ -461,7 +461,7 @@ function ensureBadge(field: HTMLInputElement, pwField: HTMLInputElement = field)
     void (async () => {
       const pw = badge.pwField;
       // Locked/not-set-up vault looks identical to "no saved logins" from autofillQuery's point of
-      // view — check real vault state first so a locked vault never gets offered a fresh generated
+      // view - check real vault state first so a locked vault never gets offered a fresh generated
       // password instead of "please unlock".
       if (!(await vaultReady())) {
         if (lockHost && lockField === pw) closeLockPrompt();
@@ -469,7 +469,7 @@ function ensureBadge(field: HTMLInputElement, pwField: HTMLInputElement = field)
         return;
       }
       // If this field has saved logins, the badge is a toggle for the accounts picker (not the
-      // generator) — clicking it should never offer to overwrite a saved password with a new
+      // generator) - clicking it should never offer to overwrite a saved password with a new
       // random one. Only fields with no saved match (new/registration fields) use it to toggle
       // the generator. Re-query fresh rather than trusting the cache: the cache may be stale from
       // an earlier focus while the vault was still locked (e.g. user just unlocked via the popup
@@ -478,7 +478,7 @@ function ensureBadge(field: HTMLInputElement, pwField: HTMLInputElement = field)
       //
       // Exception: on a registration/signup form (isLikelyRegisterForm), always prefer the
       // generator even if the site already has saved matches elsewhere (e.g. from a separate login
-      // form on the same domain) — the user is creating a new credential here, not signing in with
+      // form on the same domain) - the user is creating a new credential here, not signing in with
       // an old one, so the picker is the wrong offer regardless of what's saved for this site.
       const matches = await query();
       fieldMatches.set(pw, matches);
@@ -511,7 +511,7 @@ function closeAllBadges(): void {
 
 /**
  * Reposition every badge and reflect which one owns the open card. `recompute` re-measures each
- * field's right-inset (its overlapping site controls) — do that on layout changes (scan/resize) but
+ * field's right-inset (its overlapping site controls) - do that on layout changes (scan/resize) but
  * NOT on plain scroll, where the field and its controls move together so the cached inset holds.
  */
 function refreshBadges(recompute = false): void {
@@ -559,9 +559,9 @@ function scanFields(): void {
 // --- identity autofill (name/address/phone-style checkout & registration fields) -----------------
 //
 // Separate from the login badge system above: identities aren't password-shaped (no pwField, no
-// generator, no save-prompt) — clicking any recognized field's badge opens a small picker of saved
+// generator, no save-prompt) - clicking any recognized field's badge opens a small picker of saved
 // identities, and choosing one fills EVERY recognized identity field in the same form scope at once
-// (the standard "fill address" UX). Deliberately scoped to forms with NO visible password field —
+// (the standard "fill address" UX). Deliberately scoped to forms with NO visible password field -
 // that's what actually distinguishes a checkout/contact/shipping form from a login/register form in
 // practice, and keeps this from ever fighting the login badge for the same input (e.g. an email
 // field on a register form stays login-only; the same field on a pure checkout form gets identity
@@ -594,7 +594,7 @@ const IDENTITY_AC_MAP: Record<string, IdentityKey> = {
   'country-name': 'country',
 };
 
-// Fallback for the (common) case where a site sets no autocomplete attribute at all — matched
+// Fallback for the (common) case where a site sets no autocomplete attribute at all - matched
 // against name/id/placeholder/aria-label, same technique as USER_HINTS above. Order matters:
 // address1 must be checked before the generic "address" isn't a separate case here since line1/2
 // both require a digit or explicit "line"/"street", avoiding a bare "address" label picking line1.
@@ -668,7 +668,7 @@ function ensureIdentityBadge(field: HTMLInputElement, scopeFields: Map<IdentityK
         return;
       }
       const matches = await identityQuery();
-      if (matches.length === 0) return; // nothing saved yet — no picker to show
+      if (matches.length === 0) return; // nothing saved yet - no picker to show
       openIdentityPicker(field, matches, badge.scopeFields);
     })();
   });
@@ -691,7 +691,7 @@ function refreshIdentityBadges(recompute = false): void {
 
 /** Sweep visible text/email/tel inputs, grouped by form scope; only scopes with NO visible password
  *  field (i.e. not a login/register form) are eligible, and only scopes with at least one recognized
- *  field get badges — see the section comment above for why. `claimed` is the set of fields already
+ *  field get badges - see the section comment above for why. `claimed` is the set of fields already
  *  taken by scanCardFields() (e.g. a "Name on Card" field), which must be skipped here so a single
  *  input never gets both a card badge and an identity badge. */
 function scanIdentityFields(claimed: Set<HTMLInputElement> = new Set()): void {
@@ -818,7 +818,7 @@ function openIdentityPicker(
 // recognized fields, badge-click opens a picker of saved cards, picking one fills every recognized
 // field in the scope at once. Card fields are classified BEFORE identity fields in scanFields() and
 // claimed fields are excluded from identity classification (see scanIdentityFields's `claimed`
-// param) — otherwise a "Name on Card" field could get misread as an identity first/last name field.
+// param) - otherwise a "Name on Card" field could get misread as an identity first/last name field.
 
 type CardKey = 'cardholder' | 'number' | 'expMonth' | 'expYear' | 'expCombined' | 'cvv';
 
@@ -897,7 +897,7 @@ function ensureCardBadge(field: HTMLInputElement, scopeFields: Map<CardKey, HTML
         return;
       }
       const matches = await cardQuery();
-      if (matches.length === 0) return; // nothing saved yet — no picker to show
+      if (matches.length === 0) return; // nothing saved yet - no picker to show
       openCardPicker(field, matches, badge.scopeFields);
     })();
   });
@@ -919,7 +919,7 @@ function refreshCardBadges(recompute = false): void {
 }
 
 /** Sweep visible text/tel inputs for card-shaped fields, grouped by form scope (same NO-visible-
- *  password-field scoping rule as scanIdentityFields — a checkout form isn't a login form). Returns
+ *  password-field scoping rule as scanIdentityFields - a checkout form isn't a login form). Returns
  *  the claimed fields so scanIdentityFields can skip them (a "Name on Card" field must not also get
  *  an identity first/last-name badge). */
 function scanCardFields(): Set<HTMLInputElement> {
@@ -1052,12 +1052,12 @@ function openCardPicker(
 
 let genHost: HTMLDivElement | null = null;
 let genField: HTMLInputElement | null = null;
-// The field the generator card is visually anchored to — normally genField itself, but when opened
+// The field the generator card is visually anchored to - normally genField itself, but when opened
 // from a username-field badge (badge.pwField points at the real password field) it's the username
 // field, so the card pops out next to whichever icon was actually clicked.
 let genAnchor: HTMLInputElement | null = null;
 const genOpts = { length: 20, uppercase: true, lowercase: true, digits: true, symbols: true };
-// Fields the user has explicitly closed the generator on — suppresses auto-open on the next focus
+// Fields the user has explicitly closed the generator on - suppresses auto-open on the next focus
 // (so re-clicking into the field doesn't reopen a card they just dismissed).
 const noAutoOpen = new WeakSet<HTMLInputElement>();
 
@@ -1129,7 +1129,7 @@ function openGenerator(pw: HTMLInputElement, anchor: HTMLInputElement = pw): voi
       .len{width:22px;text-align:right;font-variant-numeric:tabular-nums;color:#e9e7ef}
       .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
       .grid label{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;color:rgba(233,231,239,.82)}
-      /* Custom checkbox — appearance:none so it ignores the OS light theme. */
+      /* Custom checkbox - appearance:none so it ignores the OS light theme. */
       .cb{-webkit-appearance:none;appearance:none;width:17px;height:17px;flex:none;display:inline-grid;
         place-content:center;border-radius:5px;border:1.5px solid rgba(255,255,255,.25);
         background:rgba(255,255,255,.05);cursor:pointer;transition:background .15s,border-color .15s}
@@ -1210,7 +1210,7 @@ function openGenerator(pw: HTMLInputElement, anchor: HTMLInputElement = pw): voi
   regen();
 
   // NB: we deliberately do NOT block mousedown here. The card is sticky (only the badge/Escape/Use
-  // close it), so letting the field blur is harmless — and it lets the length slider drag natively.
+  // close it), so letting the field blur is harmless - and it lets the length slider drag natively.
 
   shadow.getElementById('regen')!.addEventListener('click', regen);
   copyBtn.addEventListener('click', () => {
@@ -1248,7 +1248,7 @@ function openGenerator(pw: HTMLInputElement, anchor: HTMLInputElement = pw): voi
   shadow.getElementById('use')!.addEventListener('click', () => {
     setValue(pw, current);
     fillConfirm(pw, current);
-    closeGen(); // the badge stays — it's persistent for the field
+    closeGen(); // the badge stays - it's persistent for the field
   });
 }
 
@@ -1261,13 +1261,13 @@ function looksLikeEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
-// Many modern sign-up/login forms (React/Vue/etc.) have no real <form> element at all — the
+// Many modern sign-up/login forms (React/Vue/etc.) have no real <form> element at all - the
 // "Register"/"Sign in" control is a plain <button type="button"> whose onClick fires an XHR/fetch
 // directly, so no native 'submit' event is ever dispatched (confirmed on demoqa.com/register: zero
-// <form> tags in the rendered markup). We fall back to a click-based heuristic for those cases —
+// <form> tags in the rendered markup). We fall back to a click-based heuristic for those cases -
 // the same technique Bitwarden's own client uses (see PR bitwarden/clients#10909): normalize the
 // control's accessible label into individual Unicode words and match against a submit-word list,
-// rather than a single locale-specific regex, so non-English sites (a real case for us — German
+// rather than a single locale-specific regex, so non-English sites (a real case for us - German
 // speakers are among the userbase) are recognised too.
 const SUBMIT_KEYWORDS = new Set([
   // English
@@ -1288,7 +1288,7 @@ const SUBMIT_KEYWORDS = new Set([
  * Best-effort accessible label for a button-like element (used to spot submit-style controls).
  * NB: `.value` on a plain <button> is always "" (not null/undefined) even with no `value`
  * attribute set, so a naive `el.value ?? el.textContent` never falls through to textContent for
- * ordinary <button>Text</button> markup — the single most common case. Only treat `.value` as the
+ * ordinary <button>Text</button> markup - the single most common case. Only treat `.value` as the
  * label source for actual <input> controls (e.g. input[type=submit] value="Register").
  */
 function controlLabel(el: Element): string {
@@ -1298,7 +1298,7 @@ function controlLabel(el: Element): string {
   return (el.textContent ?? '').trim();
 }
 
-/** Split into lowercase Unicode "letter run" words — locale-agnostic, mirrors Bitwarden's approach. */
+/** Split into lowercase Unicode "letter run" words - locale-agnostic, mirrors Bitwarden's approach. */
 function normalizeWords(s: string): string[] {
   return s.toLowerCase().match(/[\p{L}]+/gu) ?? [];
 }
@@ -1435,7 +1435,7 @@ function attach(): void {
   });
 
   // On focus of a password field OR its username/email companion (both carry a badge): silently
-  // auto-fill the best saved match if there is one (Kaspersky-style — no picker interaction needed,
+  // auto-fill the best saved match if there is one (Kaspersky-style - no picker interaction needed,
   // the icon is just there to switch accounts), auto-open the generator for a likely new-password
   // field, or prompt to unlock a locked vault. The picker/generator/lock-prompt only ever pop open
   // from here for the locked-vault and new-password cases; the account picker itself is now
@@ -1518,7 +1518,7 @@ function attach(): void {
       closePicker();
       closeIdentityPicker();
       closeCardPicker();
-      closeLockPrompt(); // not repositioned live like the generator — just drop it, same as the picker
+      closeLockPrompt(); // not repositioned live like the generator - just drop it, same as the picker
     },
     true,
   );
@@ -1561,7 +1561,7 @@ function attach(): void {
 
   // Fallback for form-less SPA sign-up/login widgets: a click on a submit-labelled button/control
   // near a filled password field, even though no native 'submit' event will ever fire. Harmless to
-  // run alongside the listener above — maybePromptSave's signature guard skips duplicate prompts if
+  // run alongside the listener above - maybePromptSave's signature guard skips duplicate prompts if
   // both happen to fire for the same credentials.
   document.addEventListener(
     'click',

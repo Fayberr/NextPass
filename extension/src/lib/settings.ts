@@ -1,5 +1,5 @@
 /**
- * User preferences (chrome.storage.local). No secrets — just UX/security knobs: auto-lock timeout,
+ * User preferences (chrome.storage.local). No secrets - just UX/security knobs: auto-lock timeout,
  * clipboard auto-clear, and default password-generator options.
  */
 

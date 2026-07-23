@@ -33,7 +33,7 @@ const ROW_ICON: Partial<Record<Category, (props: { size?: number; className?: st
 
 /**
  * Chrome's own favicon cache (`chrome-extension://<id>/_favicon/`, requires the "favicon"
- * manifest permission) — returns the exact icon Chrome already shows in the tab for that page,
+ * manifest permission) - returns the exact icon Chrome already shows in the tab for that page,
  * transparency and all. Using this instead of an external service (Google's s2/favicons, which
  * sometimes flattens transparent icons onto a white matte) means our preview always matches what
  * the user sees in their own browser tab.
@@ -57,7 +57,7 @@ function siteHref(u: string): string {
   return u.includes('://') ? u : `https://${u}`;
 }
 
-/** Normalized hostname (no "www.") used as the grouping key for logins — two saved accounts
+/** Normalized hostname (no "www.") used as the grouping key for logins - two saved accounts
  *  for the same site (e.g. two demoqa.com logins) should visually nest under one site card
  *  instead of appearing as unrelated flat rows. */
 function hostnameOf(uris: string[]): string | null {
@@ -289,7 +289,7 @@ interface QuickField {
   secret?: boolean;
 }
 
-/** The handful of fields worth a compact hover preview, per item type — deliberately narrow
+/** The handful of fields worth a compact hover preview, per item type - deliberately narrow
  *  (not every field: e.g. no note bodies, no card expiry) to keep the expanded row scannable. */
 function quickFieldsFor(type: string, fields: Record<string, unknown> | undefined): QuickField[] {
   if (!fields) return [];
@@ -418,7 +418,7 @@ export function VaultList({
   }, [reloadKey]);
 
   // Hovering a row fetches its decrypted fields (once, then cached) so the expand panel can show
-  // a quick username/email/password preview — same decrypt operation `get_item` already does for
+  // a quick username/email/password preview - same decrypt operation `get_item` already does for
   // the full detail view, just lazily triggered by hover instead of a click.
   function handleEnter(id: string) {
     setOpenId(id);
@@ -461,7 +461,7 @@ export function VaultList({
   // isn't a creation context, so the "Add" footer is hidden for those two only.
   const showAdd = category !== 'passkey' && category !== 'favorites';
 
-  // Only logins get grouped by website — the other categories (secrets, cards, notes,
+  // Only logins get grouped by website - the other categories (secrets, cards, notes,
   // identities) don't have the "same site, multiple accounts" scenario this solves.
   const groups: ItemGroup[] =
     category === 'login' ? groupByWebsite(filtered) : filtered.map((i) => ({ key: i.id, items: [i] }));

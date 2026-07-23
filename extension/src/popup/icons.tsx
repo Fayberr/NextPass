@@ -1,5 +1,5 @@
 /**
- * Dependency-free Lucide-style SVG icons (MIT paths). Per the design rules: no emojis in UI —
+ * Dependency-free Lucide-style SVG icons (MIT paths). Per the design rules: no emojis in UI -
  * use icon libraries like Lucide. `currentColor` stroke so they inherit text color.
  */
 

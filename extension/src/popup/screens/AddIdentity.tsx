@@ -5,7 +5,7 @@ import { send } from '../client.js';
 import type { AutofillIdentityFields } from '@pm/shared';
 
 /** Add OR edit an identity: name/contact/address, for shipping/billing forms (storage + manual
- *  copy only for now — form-autofill matching isn't wired up yet, unlike logins). */
+ *  copy only for now - form-autofill matching isn't wired up yet, unlike logins). */
 export function AddIdentity({
   onDone,
   onCancel,

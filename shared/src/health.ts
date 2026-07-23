@@ -1,5 +1,5 @@
 /**
- * Client-side password health audit — runs entirely offline over already-decrypted logins, so it
+ * Client-side password health audit - runs entirely offline over already-decrypted logins, so it
  * leaks nothing. Flags weak, reused, and (optionally) old passwords, and scores overall vault
  * health 0–100. No external breach API (that would break zero-knowledge / offline guarantees).
  */

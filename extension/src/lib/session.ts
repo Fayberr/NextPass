@@ -82,13 +82,28 @@ const VAULT_KEY_KEY = 'vaultKey';
  * durable across worker restarts. It is NOT readable by content scripts (trusted contexts only).
  */
 async function getStoredKey(): Promise<Uint8Array | null> {
-  const v = await chrome.storage.session.get(VAULT_KEY_KEY);
-  const s = v[VAULT_KEY_KEY] as string | undefined;
-  return s ? fromB64url(s) : null;
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    const v = await chrome.storage.session.get(VAULT_KEY_KEY);
+    const s = v[VAULT_KEY_KEY] as string | undefined;
+    return s ? fromB64url(s) : null;
+  }
+  try {
+    const s = sessionStorage.getItem(VAULT_KEY_KEY);
+    return s ? fromB64url(s) : null;
+  } catch {
+    return null;
+  }
 }
 async function setStoredKey(key: Uint8Array | null): Promise<void> {
-  if (key === null) await chrome.storage.session.remove(VAULT_KEY_KEY);
-  else await chrome.storage.session.set({ [VAULT_KEY_KEY]: b64url(key) });
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    if (key === null) await chrome.storage.session.remove(VAULT_KEY_KEY);
+    else await chrome.storage.session.set({ [VAULT_KEY_KEY]: b64url(key) });
+    return;
+  }
+  try {
+    if (key === null) sessionStorage.removeItem(VAULT_KEY_KEY);
+    else sessionStorage.setItem(VAULT_KEY_KEY, b64url(key));
+  } catch {}
 }
 
 /**
@@ -97,12 +112,26 @@ async function setStoredKey(key: Uint8Array | null): Promise<void> {
  * - or the SW recycled - before the user confirms they saved it. It is never written to disk.
  */
 async function getPendingRecovery(): Promise<string | null> {
-  const v = await chrome.storage.session.get(PENDING_RECOVERY_KEY);
-  return (v[PENDING_RECOVERY_KEY] as string | undefined) ?? null;
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    const v = await chrome.storage.session.get(PENDING_RECOVERY_KEY);
+    return (v[PENDING_RECOVERY_KEY] as string | undefined) ?? null;
+  }
+  try {
+    return sessionStorage.getItem(PENDING_RECOVERY_KEY);
+  } catch {
+    return null;
+  }
 }
 async function setPendingRecovery(phrase: string | null): Promise<void> {
-  if (phrase === null) await chrome.storage.session.remove(PENDING_RECOVERY_KEY);
-  else await chrome.storage.session.set({ [PENDING_RECOVERY_KEY]: phrase });
+  if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+    if (phrase === null) await chrome.storage.session.remove(PENDING_RECOVERY_KEY);
+    else await chrome.storage.session.set({ [PENDING_RECOVERY_KEY]: phrase });
+    return;
+  }
+  try {
+    if (phrase === null) sessionStorage.removeItem(PENDING_RECOVERY_KEY);
+    else sessionStorage.setItem(PENDING_RECOVERY_KEY, phrase);
+  } catch {}
 }
 
 /** Decrypted item held only in memory. `fields` shape depends on `type`. */

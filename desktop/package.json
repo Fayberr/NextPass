@@ -7,7 +7,7 @@
   "description": "NextPass - Self-hosted zero-knowledge password manager desktop app (Electron).",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

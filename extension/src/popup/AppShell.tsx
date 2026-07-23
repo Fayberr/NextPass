@@ -30,7 +30,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-[560px]">
+    <div className="flex h-full min-h-[560px]">
       <Sidebar active={active} onSelect={onSelectCategory} onGenerator={onGenerator} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar

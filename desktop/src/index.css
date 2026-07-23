@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    /* Deep anthracite with a subtle violet ambient glow (top-left). */
+    background:
+      radial-gradient(120% 80% at 15% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
+      radial-gradient(90% 60% at 110% 10%, rgba(99, 102, 241, 0.12), transparent 55%),
+      #0f0e13;
+    color: #ece9f5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+  }
+}
+
 @layer utilities {
   .app-drag {
     -webkit-app-region: drag;
@@ -11,21 +45,76 @@
   }
 }
 
-/* Custom scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  /* Custom checkbox */
+  .pm-check {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    display: inline-grid;
+    place-content: center;
+    border-radius: 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+  }
+  .pm-check:hover {
+    border-color: rgba(139, 122, 234, 0.7);
+  }
+  .pm-check:checked {
+    background: linear-gradient(135deg, #8b7aea, #6d5ce0);
+    border-color: transparent;
+  }
+  .pm-check::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    opacity: 0;
+    transition: opacity 0.12s;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  .pm-check:checked::after {
+    opacity: 1;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  /* Custom range slider */
+  .pm-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+  }
+  .pm-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid #6d5ce0;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+  }
+  .pm-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: 3px solid #6d5ce0;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+  }
 }

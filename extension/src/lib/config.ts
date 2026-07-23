@@ -42,12 +42,26 @@ export interface AccountMeta {
 const KEY = 'pm.account';
 
 export async function getAccount(): Promise<AccountMeta | null> {
-  const got = await chrome.storage.local.get(KEY);
-  return (got[KEY] as AccountMeta | undefined) ?? null;
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const got = await chrome.storage.local.get(KEY);
+    return (got[KEY] as AccountMeta | undefined) ?? null;
+  }
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as AccountMeta) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function saveAccount(meta: AccountMeta): Promise<void> {
-  await chrome.storage.local.set({ [KEY]: meta });
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    await chrome.storage.local.set({ [KEY]: meta });
+    return;
+  }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(meta));
+  } catch {}
 }
 
 export async function patchAccount(patch: Partial<AccountMeta>): Promise<AccountMeta | null> {
@@ -59,5 +73,11 @@ export async function patchAccount(patch: Partial<AccountMeta>): Promise<Account
 }
 
 export async function clearAccount(): Promise<void> {
-  await chrome.storage.local.remove(KEY);
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    await chrome.storage.local.remove(KEY);
+    return;
+  }
+  try {
+    localStorage.removeItem(KEY);
+  } catch {}
 }

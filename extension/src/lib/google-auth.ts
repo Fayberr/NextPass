@@ -12,12 +12,14 @@ export interface GoogleUser {
 }
 
 export async function promptGoogleAuth(): Promise<GoogleUser | null> {
-  const clientId = (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) || '';
+  const clientId =
+    (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) ||
+    '1092837465-demo.apps.googleusercontent.com';
 
-  if (clientId && typeof chrome !== 'undefined' && chrome.identity?.launchWebAuthFlow) {
+  if (typeof chrome !== 'undefined' && chrome.identity?.launchWebAuthFlow) {
     try {
       const redirectUri = chrome.identity.getRedirectURL();
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&nonce=nextpass`;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
 
       const responseUrl = await chrome.identity.launchWebAuthFlow({
         url: authUrl,
@@ -48,25 +50,10 @@ export async function promptGoogleAuth(): Promise<GoogleUser | null> {
         }
       }
     } catch (err) {
-      console.warn('[pm] chrome.identity launchWebAuthFlow fallback triggered:', err);
+      console.warn('[pm] chrome.identity launchWebAuthFlow cancelled or failed:', err);
+      return null;
     }
   }
 
-  // Interactive fallback prompt for dev/testing when OAuth client_id is not configured
-  const email = window.prompt('Sign in with Google - Enter your Google Email address:');
-  if (!email || !email.trim()) return null;
-  const cleanEmail = email.trim().toLowerCase();
-
-  // Deterministic Google Sub ID derivation for test environments
-  const encoder = new TextEncoder();
-  const data = encoder.encode('google-sub-id:' + cleanEmail);
-  const hashBuf = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuf));
-  const googleId = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').substring(0, 21);
-
-  return {
-    googleId,
-    email: cleanEmail,
-    name: cleanEmail.split('@')[0],
-  };
+  return null;
 }

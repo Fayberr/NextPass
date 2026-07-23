@@ -14,7 +14,7 @@ export interface GoogleUser {
 export async function promptGoogleAuth(): Promise<GoogleUser | null> {
   const clientId =
     (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) ||
-    '956589414171-1713tao71m6mr3ebo0ne8og9eb4klajb.apps.googleusercontent.com';
+    '956589414171-4d6edk3ge8ole2k26frmte9cvnk3ltpp.apps.googleusercontent.com';
 
   if (typeof chrome !== 'undefined' && chrome.identity?.launchWebAuthFlow) {
     try {

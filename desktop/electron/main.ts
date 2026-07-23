@@ -107,36 +107,52 @@ ipcMain.on('open-external', (_, url: string) => {
   }
 });
 
-// System Browser / Electron OAuth Handler (Standard 1-click Google Auth for Desktop Apps)
+// System Default Browser 1-Click Loopback Google Auth
 ipcMain.handle('google-oauth', async () => {
   return new Promise((resolve) => {
-    const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
-    const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
-
+    let server: http.Server | null = null;
     let resolved = false;
 
-    // Dedicated auth window - intercepts token before any network/DNS redirect occurs
-    const authWindow = new BrowserWindow({
-      width: 520,
-      height: 640,
-      show: true,
-      autoHideMenuBar: true,
-      title: 'Sign in with Google — NextPass',
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
+    const cleanup = () => {
+      if (server) {
+        try { server.close(); } catch {}
+        server = null;
+      }
+    };
 
-    const handleUrl = (url: string) => {
-      if (url.includes('id_token=') || url.includes('access_token=')) {
-        try {
-          const hashIndex = url.indexOf('#');
-          const hash = hashIndex !== -1 ? url.substring(hashIndex + 1) : '';
-          const params = new URLSearchParams(hash);
-          const idToken = params.get('id_token');
-          if (idToken) {
+    server = http.createServer((req, res) => {
+      if (req.url?.startsWith('/callback')) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>NextPass — Signed In</title>
+              <style>
+                body { background: #09090b; color: #fff; font-family: system-ui, -apple-system, sans-serif; display: flex; height: 100vh; align-items: center; justify-content: center; margin: 0; }
+                .card { background: #18181b; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 420px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+                h2 { color: #a855f7; margin-top: 0; margin-bottom: 12px; font-size: 24px; font-weight: 700; }
+                p { color: #a1a1aa; font-size: 15px; line-height: 1.5; margin-bottom: 0; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h2>Signed in to NextPass!</h2>
+                <p>Authentication complete. You can close this browser tab and return to NextPass Desktop.</p>
+              </div>
+              <script>
+                if (window.location.hash) {
+                  fetch('/token' + window.location.hash.replace('#', '?'));
+                }
+              </script>
+            </body>
+          </html>
+        `);
+      } else if (req.url?.startsWith('/token')) {
+        const urlObj = new URL(req.url, 'http://127.0.0.1:28999');
+        const idToken = urlObj.searchParams.get('id_token');
+        if (idToken) {
+          try {
             const base64Url = idToken.split('.')[1];
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             const jsonPayload = decodeURIComponent(
@@ -146,8 +162,10 @@ ipcMain.handle('google-oauth', async () => {
                 .join(''),
             );
             const jwt = JSON.parse(jsonPayload);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
             resolved = true;
-            try { authWindow.close(); } catch {}
+            cleanup();
             resolve({
               googleId: jwt.sub,
               email: jwt.email,
@@ -155,20 +173,28 @@ ipcMain.handle('google-oauth', async () => {
               picture: jwt.picture,
               idToken,
             });
+          } catch (e) {
+            res.writeHead(400);
+            res.end();
           }
-        } catch (e) {
-          console.error('[Google OAuth] Error parsing token:', e);
         }
       }
-    };
-
-    authWindow.webContents.on('will-navigate', (_, url) => handleUrl(url));
-    authWindow.webContents.on('will-redirect', (_, url) => handleUrl(url));
-
-    authWindow.on('closed', () => {
-      if (!resolved) resolve(null);
     });
 
-    authWindow.loadURL(authUrl);
+    server.listen(28999, '127.0.0.1', () => {
+      const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
+      const redirectUri = 'http://127.0.0.1:28999/callback';
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
+
+      // Open user's default system browser where Google account is logged in
+      shell.openExternal(authUrl);
+    });
+
+    setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        resolve(null);
+      }
+    }, 120000);
   });
 });

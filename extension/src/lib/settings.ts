@@ -36,14 +36,29 @@ export const DEFAULT_SETTINGS: Settings = {
 const KEY = 'pm.settings';
 
 export async function getSettings(): Promise<Settings> {
-  const got = await chrome.storage.local.get(KEY);
-  const s = got[KEY] as Partial<Settings> | undefined;
-  return { ...DEFAULT_SETTINGS, ...s, gen: { ...DEFAULT_SETTINGS.gen, ...s?.gen } };
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const got = await chrome.storage.local.get(KEY);
+    const s = got[KEY] as Partial<Settings> | undefined;
+    return { ...DEFAULT_SETTINGS, ...s, gen: { ...DEFAULT_SETTINGS.gen, ...s?.gen } };
+  }
+  try {
+    const raw = localStorage.getItem(KEY);
+    const s = raw ? (JSON.parse(raw) as Partial<Settings>) : undefined;
+    return { ...DEFAULT_SETTINGS, ...s, gen: { ...DEFAULT_SETTINGS.gen, ...s?.gen } };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
 }
 
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
   const cur = await getSettings();
   const next: Settings = { ...cur, ...patch, gen: { ...cur.gen, ...patch.gen } };
-  await chrome.storage.local.set({ [KEY]: next });
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    await chrome.storage.local.set({ [KEY]: next });
+  } else {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next));
+    } catch {}
+  }
   return next;
 }

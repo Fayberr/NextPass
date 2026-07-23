@@ -45,23 +45,39 @@ export function Unlock({
 
   // Restore the saved draft on mount (before enabling persistence, so we don't clobber it).
   useEffect(() => {
-    chrome.storage.session.get(DRAFT_KEY).then((v) => {
-      const d = v[DRAFT_KEY] as Draft | undefined;
-      if (d) {
-        setMode(d.mode);
-        if (d.identifier) setIdentifier(d.identifier);
-        if (d.serverUrl) setServerUrl(d.serverUrl);
-        setShowAdvanced(d.showAdvanced);
-      }
+    async function loadDraft() {
+      try {
+        let d: Draft | undefined;
+        if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+          const v = await chrome.storage.session.get(DRAFT_KEY);
+          d = v[DRAFT_KEY] as Draft | undefined;
+        } else {
+          const raw = sessionStorage.getItem(DRAFT_KEY);
+          if (raw) d = JSON.parse(raw);
+        }
+        if (d) {
+          setMode(d.mode);
+          if (d.identifier) setIdentifier(d.identifier);
+          if (d.serverUrl) setServerUrl(d.serverUrl);
+          setShowAdvanced(d.showAdvanced);
+        }
+      } catch {}
       loaded.current = true;
-    });
+    }
+    void loadDraft();
   }, []);
 
   // Persist the draft as the user types (never the password).
   useEffect(() => {
     if (!loaded.current) return;
     const draft: Draft = { mode, identifier, serverUrl, showAdvanced };
-    void chrome.storage.session.set({ [DRAFT_KEY]: draft });
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      void chrome.storage.session.set({ [DRAFT_KEY]: draft });
+    } else {
+      try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {}
+    }
   }, [mode, identifier, serverUrl, showAdvanced]);
 
   async function submit() {
@@ -90,7 +106,11 @@ export function Unlock({
           }
         }
         // Successful submit - clear the saved draft.
-        await chrome.storage.session.remove(DRAFT_KEY);
+        if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+          await chrome.storage.session.remove(DRAFT_KEY);
+        } else {
+          try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+        }
         onUnlocked(res.state);
       }
     } catch (e) {
@@ -120,7 +140,11 @@ export function Unlock({
         const res = await send({ kind: 'device_unlock', serverUrl, googleUser });
         if (!res.ok) throw new Error(res.error);
         if (res.kind === 'state') {
-          await chrome.storage.session.remove(DRAFT_KEY);
+          if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+            await chrome.storage.session.remove(DRAFT_KEY);
+          } else {
+            try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+          }
           onUnlocked(res.state);
         }
         return;

@@ -91,17 +91,40 @@ const MAX_FAILED_ATTEMPTS = 5;
 const ATTEMPTS_KEY = 'pm.deviceUnlockAttempts';
 
 export async function recordDeviceUnlockFailure(): Promise<number> {
-  const got = await chrome.storage.local.get(ATTEMPTS_KEY);
-  const n = ((got[ATTEMPTS_KEY] as number | undefined) ?? 0) + 1;
-  await chrome.storage.local.set({ [ATTEMPTS_KEY]: n });
-  return n;
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const got = await chrome.storage.local.get(ATTEMPTS_KEY);
+    const n = ((got[ATTEMPTS_KEY] as number | undefined) ?? 0) + 1;
+    await chrome.storage.local.set({ [ATTEMPTS_KEY]: n });
+    return n;
+  }
+  try {
+    const n = (parseInt(localStorage.getItem(ATTEMPTS_KEY) || '0', 10) || 0) + 1;
+    localStorage.setItem(ATTEMPTS_KEY, String(n));
+    return n;
+  } catch {
+    return 1;
+  }
 }
 
 export async function clearDeviceUnlockFailures(): Promise<void> {
-  await chrome.storage.local.remove(ATTEMPTS_KEY);
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    await chrome.storage.local.remove(ATTEMPTS_KEY);
+    return;
+  }
+  try {
+    localStorage.removeItem(ATTEMPTS_KEY);
+  } catch {}
 }
 
 export async function deviceUnlockLocked(): Promise<boolean> {
-  const got = await chrome.storage.local.get(ATTEMPTS_KEY);
-  return ((got[ATTEMPTS_KEY] as number | undefined) ?? 0) >= MAX_FAILED_ATTEMPTS;
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const got = await chrome.storage.local.get(ATTEMPTS_KEY);
+    return ((got[ATTEMPTS_KEY] as number | undefined) ?? 0) >= MAX_FAILED_ATTEMPTS;
+  }
+  try {
+    const n = parseInt(localStorage.getItem(ATTEMPTS_KEY) || '0', 10) || 0;
+    return n >= MAX_FAILED_ATTEMPTS;
+  } catch {
+    return false;
+  }
 }

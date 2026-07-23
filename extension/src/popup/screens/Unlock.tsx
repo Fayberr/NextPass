@@ -383,12 +383,6 @@ export function Unlock({
               </>
             )}
 
-            {configured && (state.identifier || state.googleEmail) && (
-              <div className="mb-2 text-xs text-white/40">
-                Logging into account <span className="font-medium text-white/70">{state.googleEmail || state.identifier}</span>
-              </div>
-            )}
-
             <Field label="Master password">
               <Input
                 ref={passwordInputRef}

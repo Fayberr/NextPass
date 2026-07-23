@@ -109,7 +109,7 @@ ipcMain.on('open-external', (_, url: string) => {
 ipcMain.handle('google-oauth', async () => {
   return new Promise((resolve) => {
     const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
-    const redirectUri = 'http://localhost';
+    const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
 
     const authWindow = new BrowserWindow({

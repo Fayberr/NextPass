@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Field, Input, Select, Card } from '../ui.js';
+import { Button, Field, Input, Select, Card, Checkbox } from '../ui.js';
 import { ArrowLeft, Lock, Download, Upload, AlertTriangle, ShieldCheck, Check, GoogleIcon } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
@@ -158,16 +158,57 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
+  // Device-remember ("Enable Google auth only login") state
+  const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
+  const [deviceUnlockAvailable, setDeviceUnlockAvailable] = useState(false);
+  const [deviceUnlockBusy, setDeviceUnlockBusy] = useState(false);
+  const [deviceUnlockError, setDeviceUnlockError] = useState<string | null>(null);
+
+  async function refreshState() {
+    const st = await send({ kind: 'get_state' });
+    if (st.ok && st.kind === 'state') {
+      setGoogleEmail(st.state.googleEmail ?? null);
+      setDeviceUnlockEnabled(Boolean(st.state.deviceUnlockEnabled));
+      setDeviceUnlockAvailable(Boolean(st.state.deviceUnlockAvailable));
+    }
+  }
+
   useEffect(() => {
     void (async () => {
       const res = await send({ kind: 'get_settings' });
       if (res.ok && res.kind === 'settings') setS(res.settings);
-      const st = await send({ kind: 'get_state' });
-      if (st.ok && st.kind === 'state' && st.state.googleEmail) {
-        setGoogleEmail(st.state.googleEmail);
-      }
+      await refreshState();
     })();
   }, []);
+
+  async function handleToggleDeviceUnlock(next: boolean) {
+    setDeviceUnlockBusy(true);
+    setDeviceUnlockError(null);
+    try {
+      const res = await send({ kind: next ? 'enable_device_unlock' : 'forget_device' });
+      if (!res.ok) throw new Error(res.error);
+      await refreshState();
+    } catch (err) {
+      setDeviceUnlockError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeviceUnlockBusy(false);
+    }
+  }
+
+  async function handleForgetDevice() {
+    if (!confirm('Forget this device? You will need your master password to unlock next time.')) return;
+    setDeviceUnlockBusy(true);
+    setDeviceUnlockError(null);
+    try {
+      const res = await send({ kind: 'forget_device' });
+      if (!res.ok) throw new Error(res.error);
+      await refreshState();
+    } catch (err) {
+      setDeviceUnlockError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeviceUnlockBusy(false);
+    }
+  }
 
   async function handleLinkGoogle() {
     setGoogleBusy(true);
@@ -201,6 +242,9 @@ export function Settings({ onBack }: { onBack: () => void }) {
       const res = await send({ kind: 'unlink_google' });
       if (!res.ok) throw new Error(res.error);
       setGoogleEmail(null);
+      // Google-only unlock can't function without a linked Google account - drop it too.
+      if (deviceUnlockEnabled) await send({ kind: 'forget_device' });
+      await refreshState();
     } catch (err) {
       setGoogleError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -344,6 +388,43 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </div>
             {googleError && <p className="mt-2 text-xs text-rose-400">{googleError}</p>}
           </Card>
+
+          {googleEmail && (
+            <Card className="p-3">
+              <label className="flex items-start justify-between gap-3 cursor-pointer">
+                <div>
+                  <p className="text-xs font-medium text-white/90">Enable Google auth only login</p>
+                  <p className="text-[11px] text-white/40 mt-0.5">
+                    After enabling, unlocking on <strong>this device</strong> only needs a fresh
+                    Google sign-in - no master password. Your master password is still required on
+                    any other device, and this is auto-forgotten if you change your master
+                    password. Anyone who already has access to your unlocked, signed-in browser on
+                    this device could unlock the vault this way, so only enable it on a personal
+                    device you trust.
+                  </p>
+                </div>
+                <Checkbox
+                  checked={deviceUnlockEnabled}
+                  onChange={(v) => void handleToggleDeviceUnlock(v)}
+                  className="shrink-0 mt-0.5"
+                />
+              </label>
+              {deviceUnlockBusy && <p className="mt-2 text-[11px] text-white/40">Working...</p>}
+              {deviceUnlockError && <p className="mt-2 text-xs text-rose-400">{deviceUnlockError}</p>}
+
+              {(deviceUnlockEnabled || deviceUnlockAvailable) && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleForgetDevice}
+                  disabled={deviceUnlockBusy}
+                  className="mt-3 w-full justify-center text-rose-400 hover:text-rose-300"
+                >
+                  Forget this Device
+                </Button>
+              )}
+            </Card>
+          )}
         </section>
 
         {/* Change Master Password */}

@@ -26,6 +26,17 @@ export interface AccountMeta {
   wrappedKeyByMasterPw: string;
   wrappedKeyByRecovery: string;
   syncCursor: number;
+  /**
+   * Device-remember ("Enable Google auth only login") opt-in feature. `wrappedKeyByDevice` is
+   * the vault key wrapped by a non-extractable per-device CryptoKey (see device-unlock.ts) -
+   * useless without that device's own IndexedDB-resident key, and only ever set/cleared on THIS
+   * device (never synced). `deviceUnlockEnabled` is the explicit user opt-in toggle.
+   * `deviceUnlockExpiresAt` bounds how long the capability lives before master password is
+   * required again, even if never manually forgotten.
+   */
+  wrappedKeyByDevice?: string;
+  deviceUnlockEnabled?: boolean;
+  deviceUnlockExpiresAt?: number;
 }
 
 const KEY = 'pm.account';

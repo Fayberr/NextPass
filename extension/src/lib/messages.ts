@@ -26,6 +26,12 @@ export interface VaultState {
   /** One-time recovery phrase awaiting the user's acknowledgement (null once saved). */
   pendingRecovery: string | null;
   googleEmail?: string | null;
+  /** "Enable Google auth only login" toggle state (Settings). */
+  deviceUnlockEnabled?: boolean;
+  /** Toggle is on AND a non-expired wrapped device key actually exists on this device -
+   *  this is what the Unlock screen checks to decide whether the Google button can fully
+   *  unlock, vs. just prefilling the identifier. */
+  deviceUnlockAvailable?: boolean;
 }
 
 /** Lightweight item summary safe to render in the list (already decrypted names). */
@@ -83,6 +89,9 @@ export type Msg =
   | { kind: 'google_auth'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
   | { kind: 'link_google'; googleId: string; googleEmail: string }
   | { kind: 'unlink_google' }
+  | { kind: 'enable_device_unlock' }
+  | { kind: 'forget_device' }
+  | { kind: 'device_unlock'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
   | { kind: 'open_unlock_ui' };
 
 export type MsgResult =

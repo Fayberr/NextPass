@@ -106,6 +106,19 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.unlinkGoogle();
         return { ok: true, kind: 'state', state: await session.getState() };
 
+      case 'enable_device_unlock':
+        await session.enableDeviceUnlock();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'forget_device':
+        await session.forgetDevice();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'device_unlock':
+        await session.unlockWithDevice(msg.serverUrl, msg.googleUser);
+        await syncProxyAttachment();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
       case 'list_items':
         return { ok: true, kind: 'items', items: await session.listItems() };
 

@@ -163,6 +163,31 @@ export async function aesGcmDecrypt(
   return new Uint8Array(pt);
 }
 
+/**
+ * Same wrap/unwrap as above, but operating directly on an already-imported `CryptoKey` instead
+ * of raw bytes. Needed for non-extractable keys (e.g. the device-remember key in
+ * `device-unlock.ts`), which by design can never be turned back into a `Uint8Array` - the whole
+ * point of `extractable: false` is that raw key material never re-enters JS-reachable memory.
+ */
+export async function aesGcmEncryptWithKey(
+  key: CryptoKey,
+  plaintext: Uint8Array,
+): Promise<Uint8Array> {
+  const iv = randomBytes(IV_LEN);
+  const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext));
+  const out = new Uint8Array(iv.length + ct.length);
+  out.set(iv, 0);
+  out.set(ct, iv.length);
+  return out;
+}
+
+export async function aesGcmDecryptWithKey(key: CryptoKey, blob: Uint8Array): Promise<Uint8Array> {
+  const iv = blob.subarray(0, IV_LEN);
+  const ct = blob.subarray(IV_LEN);
+  const pt = await subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new Uint8Array(pt);
+}
+
 // ---------------------------------------------------------------------------
 // Asymmetric: RSA-OAEP-3072 / SHA-256 wrap / unwrap
 // ---------------------------------------------------------------------------

@@ -97,6 +97,24 @@ export function Unlock({
         setBusy(false);
         return;
       }
+
+      // If this device was previously remembered (Settings → "Enable Google auth only login"),
+      // a fresh Google sign-in alone fully unlocks the vault - no master password needed. The
+      // background still verifies server-side that this Google account is the one linked to
+      // this vault before it will actually use the cached device key (see session.ts
+      // unlockWithDevice()).
+      if (configured && state.deviceUnlockAvailable) {
+        const res = await send({ kind: 'device_unlock', serverUrl, googleUser });
+        if (!res.ok) throw new Error(res.error);
+        if (res.kind === 'state') {
+          await chrome.storage.session.remove(DRAFT_KEY);
+          onUnlocked(res.state);
+        }
+        return;
+      }
+
+      // Fallback (device-unlock not enabled/available): Google only identifies the account and
+      // prefills the identifier - the master password below is still required to actually unlock.
       const res = await send({
         kind: 'google_auth',
         serverUrl,
@@ -241,8 +259,18 @@ export function Unlock({
                   className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
                 >
                   <GoogleIcon />
-                  <span>Unlock with Google ({state.googleEmail})</span>
+                  <span>
+                    {state.deviceUnlockAvailable
+                      ? `Continue with Google (${state.googleEmail})`
+                      : `Sign in with Google (${state.googleEmail})`}
+                  </span>
                 </button>
+                {!state.deviceUnlockAvailable && (
+                  <p className="mb-3 -mt-2 text-center text-[10px] text-white/25">
+                    Master password still required - enable "Google auth only login" in Settings
+                    to skip it on this device.
+                  </p>
+                )}
 
                 <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
                   <div className="h-px flex-1 bg-white/10" />

@@ -49,6 +49,14 @@ import {
   type AccountMeta,
 } from './config.js';
 import { cacheClear, cacheDelete, cacheGetAll, cacheUpsert } from './storage.js';
+import {
+  wrapVaultKeyForDevice,
+  unwrapVaultKeyForDevice,
+  deleteDeviceKey,
+  recordDeviceUnlockFailure,
+  clearDeviceUnlockFailures,
+  deviceUnlockLocked,
+} from './device-unlock.js';
 import type {
   AutofillMatch,
   AutofillIdentityMatch,
@@ -125,12 +133,21 @@ export class SessionManager {
     const acct = await getAccount();
     const items = this.vaultKey ? await cacheGetAll() : [];
     let googleEmail: string | null = null;
-    if (acct && this.vaultKey && navigator.onLine) {
+    // NOTE: deliberately NOT gated on `this.vaultKey` - getVault() only needs the device bearer
+    // token (already in `acct`), not the vault key. The Unlock screen (where this matters most,
+    // to decide whether to show a Google button) only ever renders while locked/vaultKey is null,
+    // so gating on vaultKey here made this branch effectively dead code.
+    if (acct && navigator.onLine) {
       try {
         const v = await this.api(acct).getVault();
         googleEmail = v.googleEmail ?? null;
       } catch {}
     }
+    const deviceUnlockAvailable = Boolean(
+      acct?.deviceUnlockEnabled &&
+        acct.wrappedKeyByDevice &&
+        (!acct.deviceUnlockExpiresAt || Date.now() <= acct.deviceUnlockExpiresAt),
+    );
     return {
       configured: acct !== null,
       unlocked: this.vaultKey !== null,
@@ -141,6 +158,8 @@ export class SessionManager {
       lastError: this.lastError,
       pendingRecovery: await getPendingRecovery(),
       googleEmail,
+      deviceUnlockEnabled: Boolean(acct?.deviceUnlockEnabled),
+      deviceUnlockAvailable,
     };
   }
 
@@ -171,6 +190,88 @@ export class SessionManager {
   ): Promise<GoogleAuthResponse> {
     const api = new ApiClient(serverUrl);
     return await api.googleAuth(googleUser);
+  }
+
+  // --- device-remember ("Enable Google auth only login") ---
+
+  /**
+   * Opt-in, explicit action (never automatic). Requires the vault to be unlocked right now -
+   * that's the only moment we have the vault key in memory to wrap for later. Wraps a copy of it
+   * with a fresh non-extractable device-local key (see device-unlock.ts) and remembers this
+   * device for `DEVICE_UNLOCK_TTL_MS`.
+   */
+  async enableDeviceUnlock(): Promise<void> {
+    await this.hydrate();
+    const vaultKey = this.requireKey();
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const { wrapped, expiresAt } = await wrapVaultKeyForDevice(vaultKey);
+    await patchAccount({
+      wrappedKeyByDevice: wrapped,
+      deviceUnlockEnabled: true,
+      deviceUnlockExpiresAt: expiresAt,
+    });
+    await clearDeviceUnlockFailures();
+  }
+
+  /**
+   * "Forget this Device": wipes the device-local key and the wrapped vault-key copy on THIS
+   * device only. Also invoked automatically when the toggle is switched off, when the device
+   * unlock capability expires or is rate-limited, and whenever the master password is changed.
+   */
+  async forgetDevice(): Promise<void> {
+    await deleteDeviceKey();
+    await clearDeviceUnlockFailures();
+    await patchAccount({
+      wrappedKeyByDevice: undefined,
+      deviceUnlockEnabled: false,
+      deviceUnlockExpiresAt: undefined,
+    });
+  }
+
+  /**
+   * Unlock using only a fresh Google sign-in, on a device previously remembered via
+   * enableDeviceUnlock(). Before ever touching the cached device key, this verifies - against the
+   * server, not a locally-cached claim - that the Google account just signed into is the same
+   * account this vault belongs to, so a different Google account on a shared/remembered browser
+   * profile cannot unlock someone else's vault.
+   */
+  async unlockWithDevice(
+    serverUrl: string,
+    googleUser: { googleId: string; email: string; name?: string; picture?: string },
+  ): Promise<void> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('No account on this device - register or log in first.');
+    if (!acct.deviceUnlockEnabled || !acct.wrappedKeyByDevice) {
+      throw new Error('Google-only unlock is not enabled on this device.');
+    }
+    if (acct.deviceUnlockExpiresAt && Date.now() > acct.deviceUnlockExpiresAt) {
+      await this.forgetDevice();
+      throw new Error('Device unlock expired. Please enter your master password.');
+    }
+    if (await deviceUnlockLocked()) {
+      await this.forgetDevice();
+      throw new Error('Too many failed attempts. Please enter your master password.');
+    }
+
+    const api = new ApiClient(serverUrl);
+    const res = await api.googleAuth(googleUser);
+    if (!res.existingUser || (res.identifier ?? '').toLowerCase() !== acct.identifier.toLowerCase()) {
+      await recordDeviceUnlockFailure();
+      throw new Error('That Google account is not linked to this vault.');
+    }
+
+    try {
+      this.vaultKey = await unwrapVaultKeyForDevice(acct.wrappedKeyByDevice);
+    } catch {
+      await recordDeviceUnlockFailure();
+      throw new Error('Could not unlock with Google on this device. Please use your master password.');
+    }
+
+    await setStoredKey(this.vaultKey);
+    await clearDeviceUnlockFailures();
+    this.lastError = null;
+    void this.sync().catch(() => undefined);
   }
 
   /** Register a brand-new account on the server. Returns the one-time recovery phrase. */
@@ -311,6 +412,12 @@ export class SessionManager {
 
     // Lock vault immediately on password change so user unlocks with new password
     await this.lock();
+
+    // A master-password change always drops any remembered-device capability on THIS device,
+    // even though vaultKey itself isn't rotated by this (only its master-password wrapper is) -
+    // forces this device back through a full Google + master-password unlock next time, so a
+    // stale cached device key can never quietly outlive a password change.
+    await this.forgetDevice();
   }
 
   async downloadRecoveryPhrase(): Promise<{ data: string; filename: string }> {

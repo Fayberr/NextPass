@@ -265,12 +265,6 @@ export function Unlock({
                       : `Sign in with Google (${state.googleEmail})`}
                   </span>
                 </button>
-                {!state.deviceUnlockAvailable && (
-                  <p className="mb-3 -mt-2 text-center text-[10px] text-white/25">
-                    Master password still required - enable "Google auth only login" in Settings
-                    to skip it on this device.
-                  </p>
-                )}
 
                 <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
                   <div className="h-px flex-1 bg-white/10" />

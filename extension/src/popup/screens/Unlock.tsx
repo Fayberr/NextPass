@@ -232,21 +232,25 @@ export function Unlock({
           </form>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={handleGoogleAuth}
-              disabled={busy}
-              className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
-            >
-              <GoogleIcon />
-              <span>Sign in with Google</span>
-            </button>
+            {configured && state.googleEmail && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={busy}
+                  className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
+                >
+                  <GoogleIcon />
+                  <span>Unlock with Google ({state.googleEmail})</span>
+                </button>
 
-            <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
-              <div className="h-px flex-1 bg-white/10" />
-              <span>OR</span>
-              <div className="h-px flex-1 bg-white/10" />
-            </div>
+                <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span>OR</span>
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+              </>
+            )}
 
             {!configured && (
               <div className="mb-3 flex rounded-full bg-white/5 p-1 text-xs">

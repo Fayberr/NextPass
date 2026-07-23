@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import http from 'node:http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -107,35 +106,41 @@ ipcMain.on('open-external', (_, url: string) => {
   }
 });
 
-// System Default Browser 1-Click Google OAuth Handler
+// Seamless Google OAuth Handler with Persistent Chrome Session & Custom User-Agent
 ipcMain.handle('google-oauth', async () => {
   return new Promise((resolve) => {
-    let server: http.Server | null = null;
+    const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
+    const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
+
     let resolved = false;
 
-    const cleanup = () => {
-      if (server) {
-        try { server.close(); } catch {}
-        server = null;
-      }
-    };
+    const authWindow = new BrowserWindow({
+      width: 520,
+      height: 640,
+      show: true,
+      autoHideMenuBar: true,
+      title: 'Sign in with Google — NextPass',
+      webPreferences: {
+        partition: 'persist:main',
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
 
-    server = http.createServer((req, res) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', '*');
+    // Set Chrome User-Agent so Google allows seamless browser authentication
+    authWindow.webContents.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+    );
 
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      if (req.url?.startsWith('/token')) {
-        const urlObj = new URL(req.url, 'http://127.0.0.1:28999');
-        const idToken = urlObj.searchParams.get('id_token');
-        if (idToken) {
-          try {
+    const handleUrl = (url: string) => {
+      if (url.includes('id_token=') || url.includes('access_token=')) {
+        try {
+          const hashIndex = url.indexOf('#');
+          const hash = hashIndex !== -1 ? url.substring(hashIndex + 1) : '';
+          const params = new URLSearchParams(hash);
+          const idToken = params.get('id_token');
+          if (idToken) {
             const base64Url = idToken.split('.')[1];
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             const jsonPayload = decodeURIComponent(
@@ -145,10 +150,8 @@ ipcMain.handle('google-oauth', async () => {
                 .join(''),
             );
             const jwt = JSON.parse(jsonPayload);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
             resolved = true;
-            cleanup();
+            try { authWindow.close(); } catch {}
             resolve({
               googleId: jwt.sub,
               email: jwt.email,
@@ -156,28 +159,20 @@ ipcMain.handle('google-oauth', async () => {
               picture: jwt.picture,
               idToken,
             });
-          } catch (e) {
-            res.writeHead(400);
-            res.end();
           }
+        } catch (e) {
+          console.error('[Google OAuth] Error parsing token:', e);
         }
       }
+    };
+
+    authWindow.webContents.on('will-navigate', (_, url) => handleUrl(url));
+    authWindow.webContents.on('will-redirect', (_, url) => handleUrl(url));
+
+    authWindow.on('closed', () => {
+      if (!resolved) resolve(null);
     });
 
-    server.listen(28999, '127.0.0.1', () => {
-      const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
-      const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
-
-      // Launch in system default browser (Chrome/Edge/Brave) where user is signed into Google
-      shell.openExternal(authUrl);
-    });
-
-    setTimeout(() => {
-      if (!resolved) {
-        cleanup();
-        resolve(null);
-      }
-    }, 120000);
+    authWindow.loadURL(authUrl);
   });
 });

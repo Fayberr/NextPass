@@ -107,7 +107,7 @@ ipcMain.on('open-external', (_, url: string) => {
   }
 });
 
-// System Browser 1-Click Google OAuth Handler
+// System Default Browser 1-Click Google OAuth Handler
 ipcMain.handle('google-oauth', async () => {
   return new Promise((resolve) => {
     let server: http.Server | null = null;
@@ -121,7 +121,6 @@ ipcMain.handle('google-oauth', async () => {
     };
 
     server = http.createServer((req, res) => {
-      // Set CORS headers for loopback token transfer
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', '*');
@@ -167,14 +166,13 @@ ipcMain.handle('google-oauth', async () => {
 
     server.listen(28999, '127.0.0.1', () => {
       const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
-      const redirectUri = 'https://password-manager.fayber.dev/oauth/callback';
+      const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
 
-      // Launch Google OAuth in system default browser (where Google accounts are logged in)
+      // Launch in system default browser (Chrome/Edge/Brave) where user is signed into Google
       shell.openExternal(authUrl);
     });
 
-    // 2-minute timeout
     setTimeout(() => {
       if (!resolved) {
         cleanup();

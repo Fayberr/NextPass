@@ -116,10 +116,7 @@ ipcMain.handle('google-oauth', async () => {
 
     let resolved = false;
 
-    // Launch in system default browser (Chrome/Edge/Brave) where Google accounts are already logged in
-    shell.openExternal(authUrl);
-
-    // Also open a helper auth window as window fallback so login works in all environments
+    // Dedicated auth window - intercepts token before any network/DNS redirect occurs
     const authWindow = new BrowserWindow({
       width: 520,
       height: 640,

@@ -69,6 +69,38 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
     return { deviceId, token };
   }
 
+  app.get('/oauth/callback', async (request, reply) => {
+    return reply.type('text/html').send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NextPass — Signed In</title>
+  <style>
+    body { background: #09090b; color: #fff; font-family: system-ui, -apple-system, sans-serif; display: flex; height: 100vh; align-items: center; justify-content: center; margin: 0; }
+    .card { background: #18181b; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 420px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+    h2 { color: #a855f7; margin-top: 0; margin-bottom: 12px; font-size: 24px; font-weight: 700; }
+    p { color: #a1a1aa; font-size: 15px; line-height: 1.5; margin-bottom: 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Successfully Signed In!</h2>
+    <p>Authentication complete. You can close this tab and return to NextPass Desktop.</p>
+  </div>
+  <script>
+    if (window.location.hash) {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const idToken = params.get('id_token');
+      if (idToken) {
+        fetch('http://127.0.0.1:28999/token?id_token=' + encodeURIComponent(idToken), { mode: 'no-cors' }).catch(() => {});
+      }
+    }
+  </script>
+</body>
+</html>`);
+  });
+
   // --- POST /api/register --------------------------------------------------
   app.post('/api/auth/google', async (request, reply) => {
     const parsed = googleAuthSchema.safeParse(request.body);

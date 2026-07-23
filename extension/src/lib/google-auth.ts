@@ -12,11 +12,11 @@ export interface GoogleUser {
 }
 
 export async function promptGoogleAuth(): Promise<GoogleUser | null> {
-  if (typeof chrome !== 'undefined' && chrome.identity?.launchWebAuthFlow) {
+  const clientId = (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) || '';
+
+  if (clientId && typeof chrome !== 'undefined' && chrome.identity?.launchWebAuthFlow) {
     try {
       const redirectUri = chrome.identity.getRedirectURL();
-      // Public Google Client ID for OAuth PKCE flow
-      const clientId = '1092837465-demo.apps.googleusercontent.com';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&nonce=nextpass`;
 
       const responseUrl = await chrome.identity.launchWebAuthFlow({

@@ -7,14 +7,17 @@
   "workspaces": [
     "shared",
     "server",
-    "extension"
+    "extension",
+    "desktop"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "dev:server": "npm run dev --workspace @pm/server",
     "dev:ext": "npm run dev --workspace @pm/extension",
-    "build:ext": "npm run build --workspace @pm/extension"
+    "dev:desktop": "npm run dev --workspace @pm/desktop",
+    "build:ext": "npm run build --workspace @pm/extension",
+    "build:desktop": "npm run build --workspace @pm/desktop"
   },
   "engines": {
     "node": ">=20"

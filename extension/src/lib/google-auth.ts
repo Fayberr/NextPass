@@ -1,6 +1,6 @@
 /**
  * Google OAuth helper for NextPass Chrome Extension & Desktop app.
- * Uses chrome.identity.launchWebAuthFlow when available, with clean fallback for Desktop.
+ * Uses chrome.identity.launchWebAuthFlow in Extension, and electronAPI.googleOAuth in Desktop app.
  */
 
 export interface GoogleUser {
@@ -11,11 +11,12 @@ export interface GoogleUser {
   idToken?: string;
 }
 
-export async function promptGoogleAuth(emailInput?: string): Promise<GoogleUser | null> {
+export async function promptGoogleAuth(): Promise<GoogleUser | null> {
   const clientId =
     (typeof process !== 'undefined' && process.env?.GOOGLE_CLIENT_ID) ||
     '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
 
+  // 1. Chrome Extension Environment
   if (typeof chrome !== 'undefined' && chrome.identity?.launchWebAuthFlow) {
     try {
       const redirectUri = chrome.identity.getRedirectURL();
@@ -35,33 +36,16 @@ export async function promptGoogleAuth(emailInput?: string): Promise<GoogleUser 
     }
   }
 
-  // Fallback for Desktop (Electron) / Standalone Web:
-  // Safe prompt fallback without throwing Electron window.prompt error
-  let email = emailInput;
-  if (!email && typeof window !== 'undefined') {
+  // 2. Electron Desktop App Environment (Real Google Auth Popup Window)
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.googleOAuth) {
     try {
-      if (typeof window.prompt === 'function') {
-        email = window.prompt('Enter your Google Account Email to sign in:') || undefined;
+      const res = await (window as any).electronAPI.googleOAuth();
+      if (res && res.email) {
+        return res as GoogleUser;
       }
-    } catch {}
-  }
-
-  if (!email) {
-    email = 'user@gmail.com';
-  }
-
-  if (email && email.includes('@')) {
-    const cleanEmail = email.trim().toLowerCase();
-    const encoder = new TextEncoder();
-    const data = encoder.encode(cleanEmail);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const googleId = 'g_' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
-    return {
-      googleId,
-      email: cleanEmail,
-      name: cleanEmail.split('@')[0],
-    };
+    } catch (err) {
+      console.warn('[pm] Electron googleOAuth window cancelled or failed:', err);
+    }
   }
 
   return null;

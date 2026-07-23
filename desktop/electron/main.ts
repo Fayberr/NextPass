@@ -105,3 +105,67 @@ ipcMain.on('open-external', (_, url: string) => {
     shell.openExternal(url);
   }
 });
+
+ipcMain.handle('google-oauth', async () => {
+  return new Promise((resolve) => {
+    const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
+    const redirectUri = 'https://password-manager.fayber.dev/oauth/callback';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
+
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 620,
+      show: true,
+      autoHideMenuBar: true,
+      title: 'Sign in with Google — NextPass',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    let resolved = false;
+
+    const handleUrl = (url: string) => {
+      if (url.includes('id_token=') || url.includes('access_token=')) {
+        try {
+          const hashIndex = url.indexOf('#');
+          const hash = hashIndex !== -1 ? url.substring(hashIndex + 1) : '';
+          const params = new URLSearchParams(hash);
+          const idToken = params.get('id_token');
+          if (idToken) {
+            const base64Url = idToken.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(
+              atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join(''),
+            );
+            const jwt = JSON.parse(jsonPayload);
+            resolved = true;
+            authWindow.close();
+            resolve({
+              googleId: jwt.sub,
+              email: jwt.email,
+              name: jwt.name,
+              picture: jwt.picture,
+              idToken,
+            });
+          }
+        } catch (e) {
+          console.error('[Google OAuth] Error parsing token:', e);
+        }
+      }
+    };
+
+    authWindow.webContents.on('will-navigate', (_, url) => handleUrl(url));
+    authWindow.webContents.on('will-redirect', (_, url) => handleUrl(url));
+
+    authWindow.on('closed', () => {
+      if (!resolved) resolve(null);
+    });
+
+    authWindow.loadURL(authUrl);
+  });
+});

@@ -36,6 +36,9 @@ export function Unlock({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [pendingGoogleLink, setPendingGoogleLink] = useState<{ googleId: string; googleEmail: string } | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const loaded = useRef(false);
 
   const configured = state.configured;
@@ -66,7 +69,7 @@ export function Unlock({
     setError(null);
     try {
       let res;
-      if (configured) {
+      if (configured && (!identifier || identifier.toLowerCase() === (state.identifier ?? '').toLowerCase())) {
         res = await send({ kind: 'unlock', password });
       } else if (mode === 'register') {
         res = await send({ kind: 'register', serverUrl, identifier, password });
@@ -75,8 +78,18 @@ export function Unlock({
       }
       if (!res.ok) throw new Error(res.error);
       if (res.kind === 'state') {
-        // Successful submit - clear the saved draft. (If registering, App now routes to the
-        // recovery screen because res.state.pendingRecovery is set.)
+        if (pendingGoogleLink) {
+          try {
+            await send({
+              kind: 'link_google',
+              googleId: pendingGoogleLink.googleId,
+              googleEmail: pendingGoogleLink.googleEmail,
+            });
+          } catch {
+            // Ignore if linking fails or already linked
+          }
+        }
+        // Successful submit - clear the saved draft.
         await chrome.storage.session.remove(DRAFT_KEY);
         onUnlocked(res.state);
       }
@@ -90,6 +103,7 @@ export function Unlock({
   async function handleGoogleAuth() {
     setBusy(true);
     setError(null);
+    setInfoMessage(null);
     try {
       // Runs the interactive account chooser in the background service worker (not here in the
       // popup) - see the 'google_signin' case in background/index.ts for why: the chooser window
@@ -104,10 +118,7 @@ export function Unlock({
       }
 
       // If this device was previously remembered (Settings → "Enable Google auth only login"),
-      // a fresh Google sign-in alone fully unlocks the vault - no master password needed. The
-      // background still verifies server-side that this Google account is the one linked to
-      // this vault before it will actually use the cached device key (see session.ts
-      // unlockWithDevice()).
+      // a fresh Google sign-in alone fully unlocks the vault - no master password needed.
       if (configured && state.deviceUnlockAvailable) {
         const res = await send({ kind: 'device_unlock', serverUrl, googleUser });
         if (!res.ok) throw new Error(res.error);
@@ -118,8 +129,8 @@ export function Unlock({
         return;
       }
 
-      // Fallback (device-unlock not enabled/available): Google only identifies the account and
-      // prefills the identifier - the master password below is still required to actually unlock.
+      // Fallback (device-unlock not enabled/available): Google identifies & verifies the account,
+      // then prompts for the master password to unlock/decrypt.
       const res = await send({
         kind: 'google_auth',
         serverUrl,
@@ -130,11 +141,28 @@ export function Unlock({
       if (res.kind === 'google_auth_result') {
         const info = res.res;
         if (info.identifier) setIdentifier(info.identifier);
+
+        setPendingGoogleLink({
+          googleId: googleUser.googleId,
+          googleEmail: googleUser.email,
+        });
+
+        const idToShow = info.identifier || googleUser.email;
         if (info.existingUser) {
           setMode('login');
+          setInfoMessage(
+            `Google account authenticated (${idToShow}). Enter your master password to ${
+              configured && idToShow.toLowerCase() === (state.identifier ?? '').toLowerCase() ? 'unlock' : 'log in'
+            }.`,
+          );
         } else {
           setMode('register');
+          setInfoMessage(
+            `Google account (${idToShow}) verified. Choose a master password to create your vault.`,
+          );
         }
+
+        setTimeout(() => passwordInputRef.current?.focus(), 50);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -255,29 +283,27 @@ export function Unlock({
           </form>
         ) : (
           <>
-            {configured && state.googleEmail && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleGoogleAuth}
-                  disabled={busy}
-                  className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
-                >
-                  <GoogleIcon />
-                  <span>
-                    {state.deviceUnlockAvailable
-                      ? `Continue with Google (${state.googleEmail})`
-                      : `Sign in with Google (${state.googleEmail})`}
-                  </span>
-                </button>
+            <button
+              type="button"
+              onClick={handleGoogleAuth}
+              disabled={busy}
+              className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-white transition hover:border-white/20 hover:bg-white/10 active:scale-[0.99]"
+            >
+              <GoogleIcon />
+              <span>
+                {configured && state.deviceUnlockAvailable
+                  ? `Continue with Google (${state.googleEmail || state.identifier})`
+                  : configured && state.googleEmail
+                  ? `Sign in with Google (${state.googleEmail})`
+                  : 'Sign in with Google'}
+              </span>
+            </button>
 
-                <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
-                  <div className="h-px flex-1 bg-white/10" />
-                  <span>OR</span>
-                  <div className="h-px flex-1 bg-white/10" />
-                </div>
-              </>
-            )}
+            <div className="mb-3 flex items-center gap-2 text-[10px] text-white/25 font-semibold tracking-wider">
+              <div className="h-px flex-1 bg-white/10" />
+              <span>OR</span>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
 
             {!configured && (
               <div className="mb-3 flex rounded-full bg-white/5 p-1 text-xs">
@@ -314,6 +340,7 @@ export function Unlock({
 
             <Field label="Master password">
               <Input
+                ref={passwordInputRef}
                 type="password"
                 value={password}
                 onChange={(e) => {
@@ -325,6 +352,13 @@ export function Unlock({
                 autoComplete="current-password"
               />
             </Field>
+
+            {infoMessage && (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-200">
+                <ShieldCheck size={14} className="shrink-0 text-violet-400" />
+                <span>{infoMessage}</span>
+              </div>
+            )}
 
             {error && (
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300">

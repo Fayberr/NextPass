@@ -1,13 +1,13 @@
-import { app as l, globalShortcut as _, BrowserWindow as m, ipcMain as a, shell as U } from "electron";
-import r from "node:path";
+import { app as l, globalShortcut as _, BrowserWindow as u, ipcMain as a, shell as b } from "electron";
+import s from "node:path";
 import { fileURLToPath as k } from "node:url";
-const b = r.dirname(k(import.meta.url));
-process.env.APP_ROOT = r.join(b, "..");
-const g = process.env.VITE_DEV_SERVER_URL, A = r.join(process.env.APP_ROOT, "dist-electron"), R = r.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = g ? r.join(process.env.APP_ROOT, "public") : R;
+const R = s.dirname(k(import.meta.url));
+process.env.APP_ROOT = s.join(R, "..");
+const m = process.env.VITE_DEV_SERVER_URL, A = s.join(process.env.APP_ROOT, "dist-electron"), I = s.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = m ? s.join(process.env.APP_ROOT, "public") : I;
 let e = null;
 function w() {
-  e = new m({
+  e = new u({
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -17,18 +17,18 @@ function w() {
     backgroundColor: "#09090b",
     show: !1,
     webPreferences: {
-      preload: r.join(b, "preload.cjs"),
+      preload: s.join(R, "preload.cjs"),
       sandbox: !1,
       contextIsolation: !0,
       nodeIntegration: !1
     }
-  }), e.webContents.on("console-message", (n, o, c, p, s) => {
-    console.log(`[Renderer Console ${o}] ${c} (${s}:${p})`);
+  }), e.webContents.on("console-message", (n, o, c, d, p) => {
+    console.log(`[Renderer Console ${o}] ${c} (${p}:${d})`);
   }), e.webContents.on("did-fail-load", (n, o, c) => {
     console.error(`[Load Error ${o}] ${c}`);
   }), e.once("ready-to-show", () => {
     e == null || e.show(), e == null || e.webContents.openDevTools({ mode: "detach" });
-  }), g ? e.loadURL(g) : e.loadFile(r.join(R, "index.html"));
+  }), m ? e.loadURL(m) : e.loadFile(s.join(I, "index.html"));
 }
 l.whenReady().then(() => {
   w();
@@ -40,7 +40,7 @@ l.whenReady().then(() => {
     console.error("Failed to register global hotkey:", n);
   }
   l.on("activate", () => {
-    m.getAllWindows().length === 0 && w();
+    u.getAllWindows().length === 0 && w();
   });
 });
 l.on("will-quit", () => {
@@ -59,12 +59,15 @@ a.on("window-close", () => {
   e == null || e.close();
 });
 a.on("open-external", (n, o) => {
-  o && (o.startsWith("http://") || o.startsWith("https://")) && U.openExternal(o);
+  o && (o.startsWith("http://") || o.startsWith("https://")) && b.openExternal(o);
 });
 a.handle("google-oauth", async () => new Promise((n) => {
-  const p = `https://accounts.google.com/o/oauth2/v2/auth?client_id=103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com&response_type=id_token%20token&redirect_uri=${encodeURIComponent("https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/")}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`, s = new m({
-    width: 500,
-    height: 620,
+  const d = `https://accounts.google.com/o/oauth2/v2/auth?client_id=103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com&response_type=id_token%20token&redirect_uri=${encodeURIComponent("https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/")}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
+  let p = !1;
+  b.openExternal(d);
+  const i = new u({
+    width: 520,
+    height: 640,
     show: !0,
     autoHideMenuBar: !0,
     title: "Sign in with Google — NextPass",
@@ -72,34 +75,37 @@ a.handle("google-oauth", async () => new Promise((n) => {
       nodeIntegration: !1,
       contextIsolation: !0
     }
-  });
-  let u = !1;
-  const f = (i) => {
-    if (i.includes("id_token=") || i.includes("access_token="))
+  }), f = (r) => {
+    if (r.includes("id_token=") || r.includes("access_token="))
       try {
-        const t = i.indexOf("#"), I = t !== -1 ? i.substring(t + 1) : "", h = new URLSearchParams(I).get("id_token");
-        if (h) {
-          const P = h.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"), x = decodeURIComponent(
-            atob(P).split("").map((E) => "%" + ("00" + E.charCodeAt(0).toString(16)).slice(-2)).join("")
-          ), d = JSON.parse(x);
-          u = !0, s.close(), n({
-            googleId: d.sub,
-            email: d.email,
-            name: d.name,
-            picture: d.picture,
-            idToken: h
+        const t = r.indexOf("#"), x = t !== -1 ? r.substring(t + 1) : "", g = new URLSearchParams(x).get("id_token");
+        if (g) {
+          const E = g.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"), P = decodeURIComponent(
+            atob(E).split("").map((U) => "%" + ("00" + U.charCodeAt(0).toString(16)).slice(-2)).join("")
+          ), h = JSON.parse(P);
+          p = !0;
+          try {
+            i.close();
+          } catch {
+          }
+          n({
+            googleId: h.sub,
+            email: h.email,
+            name: h.name,
+            picture: h.picture,
+            idToken: g
           });
         }
       } catch (t) {
         console.error("[Google OAuth] Error parsing token:", t);
       }
   };
-  s.webContents.on("will-navigate", (i, t) => f(t)), s.webContents.on("will-redirect", (i, t) => f(t)), s.on("closed", () => {
-    u || n(null);
-  }), s.loadURL(p);
+  i.webContents.on("will-navigate", (r, t) => f(t)), i.webContents.on("will-redirect", (r, t) => f(t)), i.on("closed", () => {
+    p || n(null);
+  }), i.loadURL(d);
 }));
 export {
   A as MAIN_DIST,
-  R as RENDERER_DIST,
-  g as VITE_DEV_SERVER_URL
+  I as RENDERER_DIST,
+  m as VITE_DEV_SERVER_URL
 };

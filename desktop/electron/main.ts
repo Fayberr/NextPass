@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import http from 'node:http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -106,15 +107,22 @@ ipcMain.on('open-external', (_, url: string) => {
   }
 });
 
+// System Browser / Electron OAuth Handler (Standard 1-click Google Auth for Desktop Apps)
 ipcMain.handle('google-oauth', async () => {
   return new Promise((resolve) => {
     const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
     const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
 
+    let resolved = false;
+
+    // Launch in system default browser (Chrome/Edge/Brave) where Google accounts are already logged in
+    shell.openExternal(authUrl);
+
+    // Also open a helper auth window as window fallback so login works in all environments
     const authWindow = new BrowserWindow({
-      width: 500,
-      height: 620,
+      width: 520,
+      height: 640,
       show: true,
       autoHideMenuBar: true,
       title: 'Sign in with Google — NextPass',
@@ -123,8 +131,6 @@ ipcMain.handle('google-oauth', async () => {
         contextIsolation: true,
       },
     });
-
-    let resolved = false;
 
     const handleUrl = (url: string) => {
       if (url.includes('id_token=') || url.includes('access_token=')) {
@@ -144,7 +150,7 @@ ipcMain.handle('google-oauth', async () => {
             );
             const jwt = JSON.parse(jsonPayload);
             resolved = true;
-            authWindow.close();
+            try { authWindow.close(); } catch {}
             resolve({
               googleId: jwt.sub,
               email: jwt.email,

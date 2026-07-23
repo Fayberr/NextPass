@@ -3,7 +3,6 @@ import { Button, Field, Input, Select, Card, Checkbox } from '../ui.js';
 import { ArrowLeft, Lock, Download, Upload, AlertTriangle, ShieldCheck, Check, GoogleIcon } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
-import { promptGoogleAuth } from '../../lib/google-auth.js';
 
 const LOCK_OPTIONS = [
   { value: 0, label: 'Never' },
@@ -214,7 +213,11 @@ export function Settings({ onBack }: { onBack: () => void }) {
     setGoogleBusy(true);
     setGoogleError(null);
     try {
-      const googleUser = await promptGoogleAuth();
+      // See background/index.ts's 'google_signin' case: the account chooser must run in the
+      // background, not here, or its own window stealing focus auto-closes this popup mid-flight.
+      const gRes = await send({ kind: 'google_signin' });
+      if (!gRes.ok) throw new Error(gRes.error);
+      const googleUser = gRes.kind === 'google_user' ? gRes.googleUser : null;
       if (!googleUser) {
         setGoogleBusy(false);
         return;

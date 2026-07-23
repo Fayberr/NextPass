@@ -4,7 +4,6 @@ import { ShieldCheck, AlertTriangle, GoogleIcon } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SERVER_URL } from '../../lib/config.js';
 import type { VaultState } from '../../lib/messages.js';
-import { promptGoogleAuth } from '../../lib/google-auth.js';
 
 /**
  * The unlock/onboarding hero screen. Modes: unlock (account exists, vault locked) |
@@ -92,7 +91,13 @@ export function Unlock({
     setBusy(true);
     setError(null);
     try {
-      const googleUser = await promptGoogleAuth();
+      // Runs the interactive account chooser in the background service worker (not here in the
+      // popup) - see the 'google_signin' case in background/index.ts for why: the chooser window
+      // stealing focus would otherwise auto-close this popup mid-flight and silently drop
+      // everything after it, with no error surfaced anywhere.
+      const gRes = await send({ kind: 'google_signin' });
+      if (!gRes.ok) throw new Error(gRes.error);
+      const googleUser = gRes.kind === 'google_user' ? gRes.googleUser : null;
       if (!googleUser) {
         setBusy(false);
         return;

@@ -8,6 +8,7 @@ import { SessionManager } from '../lib/session.js';
 import { WebAuthnProxy } from './webauthn-proxy.js';
 import type { Msg, MsgResult } from '../lib/messages.js';
 import { getSettings, setSettings } from '../lib/settings.js';
+import { promptGoogleAuth } from '../lib/google-auth.js';
 
 const session = new SessionManager();
 const waProxy = new WebAuthnProxy(session);
@@ -118,6 +119,18 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.unlockWithDevice(msg.serverUrl, msg.googleUser);
         await syncProxyAttachment();
         return { ok: true, kind: 'state', state: await session.getState() };
+
+      // Run the interactive Google account-chooser flow HERE, in the persistent background
+      // service worker, not in the popup. chrome.identity.launchWebAuthFlow({interactive:true})
+      // opens its own top-level browser window for the chooser - that window stealing focus
+      // causes Chrome to auto-close the extension's default_popup mid-flight, silently killing
+      // whatever async chain was running in the popup (no error, no console output - it just
+      // stops existing). Running it in the background survives that; the popup only awaits the
+      // final message response, which is delivered whenever it's next open/listening.
+      case 'google_signin': {
+        const googleUser = await promptGoogleAuth();
+        return { ok: true, kind: 'google_user', googleUser };
+      }
 
       case 'list_items':
         return { ok: true, kind: 'items', items: await session.listItems() };

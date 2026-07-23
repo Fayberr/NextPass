@@ -92,10 +92,16 @@ export type Msg =
   | { kind: 'enable_device_unlock' }
   | { kind: 'forget_device' }
   | { kind: 'device_unlock'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
+  | { kind: 'google_signin' }
   | { kind: 'open_unlock_ui' };
 
 export type MsgResult =
   | { ok: true; kind: 'google_auth_result'; res: import('@pm/shared').GoogleAuthResponse }
+  | {
+      ok: true;
+      kind: 'google_user';
+      googleUser: { googleId: string; email: string; name?: string; picture?: string; idToken?: string } | null;
+    }
   | { ok: true; kind: 'state'; state: VaultState; recovery?: string }
   | { ok: true; kind: 'items'; items: ItemSummary[] }
   | { ok: true; kind: 'item'; id: string; type: string; fields: unknown; favorite: boolean }

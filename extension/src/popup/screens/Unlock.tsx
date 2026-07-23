@@ -233,7 +233,8 @@ export function Unlock({
   }
 
   return (
-    <div className="flex min-h-[500px] flex-col justify-center p-6">
+    <div className="flex h-full w-full items-center justify-center p-6 overflow-y-auto">
+      <div className="w-full max-w-md my-auto">
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-glow to-indigo-500 text-white shadow-glass">
           <ShieldCheck size={28} />
@@ -467,5 +468,6 @@ export function Unlock({
         )}
       </Card>
     </div>
+  </div>
   );
 }

@@ -1,13 +1,14 @@
-import { app as l, globalShortcut as _, BrowserWindow as u, ipcMain as a, shell as P } from "electron";
-import s from "node:path";
-import { fileURLToPath as U } from "node:url";
-const b = s.dirname(U(import.meta.url));
-process.env.APP_ROOT = s.join(b, "..");
-const g = process.env.VITE_DEV_SERVER_URL, O = s.join(process.env.APP_ROOT, "dist-electron"), R = s.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = g ? s.join(process.env.APP_ROOT, "public") : R;
+import { app as c, globalShortcut as g, BrowserWindow as _, ipcMain as a, shell as w } from "electron";
+import n from "node:path";
+import { fileURLToPath as E } from "node:url";
+import k from "node:http";
+const b = n.dirname(E(import.meta.url));
+process.env.APP_ROOT = n.join(b, "..");
+const m = process.env.VITE_DEV_SERVER_URL, O = n.join(process.env.APP_ROOT, "dist-electron"), R = n.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = m ? n.join(process.env.APP_ROOT, "public") : R;
 let e = null;
-function w() {
-  e = new u({
+function f() {
+  e = new _({
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -17,37 +18,37 @@ function w() {
     backgroundColor: "#09090b",
     show: !1,
     webPreferences: {
-      preload: s.join(b, "preload.cjs"),
+      preload: n.join(b, "preload.cjs"),
       sandbox: !1,
       contextIsolation: !0,
       nodeIntegration: !1
     }
-  }), e.webContents.on("console-message", (n, o, c, h, d) => {
-    console.log(`[Renderer Console ${o}] ${c} (${d}:${h})`);
-  }), e.webContents.on("did-fail-load", (n, o, c) => {
-    console.error(`[Load Error ${o}] ${c}`);
+  }), e.webContents.on("console-message", (o, t, r, i, s) => {
+    console.log(`[Renderer Console ${t}] ${r} (${s}:${i})`);
+  }), e.webContents.on("did-fail-load", (o, t, r) => {
+    console.error(`[Load Error ${t}] ${r}`);
   }), e.once("ready-to-show", () => {
     e == null || e.show(), e == null || e.webContents.openDevTools({ mode: "detach" });
-  }), g ? e.loadURL(g) : e.loadFile(s.join(R, "index.html"));
+  }), m ? e.loadURL(m) : e.loadFile(n.join(R, "index.html"));
 }
-l.whenReady().then(() => {
-  w();
+c.whenReady().then(() => {
+  f();
   try {
-    _.register("CommandOrControl+Alt+A", () => {
+    g.register("CommandOrControl+Alt+A", () => {
       e && (e.isMinimized() && e.restore(), e.focus(), e.webContents.send("toggle-quick-search"));
     });
-  } catch (n) {
-    console.error("Failed to register global hotkey:", n);
+  } catch (o) {
+    console.error("Failed to register global hotkey:", o);
   }
-  l.on("activate", () => {
-    u.getAllWindows().length === 0 && w();
+  c.on("activate", () => {
+    _.getAllWindows().length === 0 && f();
   });
 });
-l.on("will-quit", () => {
-  _.unregisterAll();
+c.on("will-quit", () => {
+  g.unregisterAll();
 });
-l.on("window-all-closed", () => {
-  process.platform !== "darwin" && l.quit();
+c.on("window-all-closed", () => {
+  process.platform !== "darwin" && c.quit();
 });
 a.on("window-minimize", () => {
   e == null || e.minimize();
@@ -58,58 +59,53 @@ a.on("window-maximize", () => {
 a.on("window-close", () => {
   e == null || e.close();
 });
-a.on("open-external", (n, o) => {
-  o && (o.startsWith("http://") || o.startsWith("https://")) && P.openExternal(o);
+a.on("open-external", (o, t) => {
+  t && (t.startsWith("http://") || t.startsWith("https://")) && w.openExternal(t);
 });
-a.handle("google-oauth", async () => new Promise((n) => {
-  const h = `https://accounts.google.com/o/oauth2/v2/auth?client_id=103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com&response_type=id_token%20token&redirect_uri=${encodeURIComponent("https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/")}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
-  let d = !1;
-  const i = new u({
-    width: 520,
-    height: 640,
-    show: !0,
-    autoHideMenuBar: !0,
-    title: "Sign in with Google — NextPass",
-    webPreferences: {
-      partition: "persist:main",
-      nodeIntegration: !1,
-      contextIsolation: !0
-    }
-  });
-  i.webContents.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-  );
-  const f = (r) => {
-    if (r.includes("id_token=") || r.includes("access_token="))
-      try {
-        const t = r.indexOf("#"), I = t !== -1 ? r.substring(t + 1) : "", m = new URLSearchParams(I).get("id_token");
-        if (m) {
-          const k = m.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"), x = decodeURIComponent(
-            atob(k).split("").map((C) => "%" + ("00" + C.charCodeAt(0).toString(16)).slice(-2)).join("")
-          ), p = JSON.parse(x);
-          d = !0;
-          try {
-            i.close();
-          } catch {
-          }
-          n({
-            googleId: p.sub,
-            email: p.email,
-            name: p.name,
-            picture: p.picture,
-            idToken: m
+function I(o) {
+  const r = o.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"), i = Buffer.from(r, "base64").toString("utf-8");
+  return JSON.parse(i);
+}
+a.handle("google-oauth", async () => new Promise((o) => {
+  const i = `https://accounts.google.com/o/oauth2/v2/auth?client_id=103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com&response_type=id_token%20token&redirect_uri=${encodeURIComponent("https://password-manager.fayber.dev/oauth/callback")}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
+  let s = !1;
+  const p = k.createServer((d, h) => {
+    if (h.setHeader("Access-Control-Allow-Origin", "*"), d.url && d.url.startsWith("/token")) {
+      const u = new URL(d.url, "http://127.0.0.1:28999").searchParams.get("id_token");
+      if (h.end("ok"), u && !s) {
+        s = !0;
+        try {
+          const l = I(u);
+          o({
+            googleId: l.sub,
+            email: l.email,
+            name: l.name,
+            picture: l.picture,
+            idToken: u
           });
+        } catch (l) {
+          console.error("[Google OAuth] Error parsing token:", l), o(null);
         }
-      } catch (t) {
-        console.error("[Google OAuth] Error parsing token:", t);
+        p.close();
       }
-  };
-  i.webContents.on("will-navigate", (r, t) => f(t)), i.webContents.on("will-redirect", (r, t) => f(t)), i.on("closed", () => {
-    d || n(null);
-  }), i.loadURL(h);
+    } else
+      h.end("");
+  });
+  p.listen(28999, "127.0.0.1", () => {
+    w.openExternal(i);
+  }), setTimeout(() => {
+    if (!s) {
+      s = !0;
+      try {
+        p.close();
+      } catch {
+      }
+      o(null);
+    }
+  }, 5 * 60 * 1e3);
 }));
 export {
   O as MAIN_DIST,
   R as RENDERER_DIST,
-  g as VITE_DEV_SERVER_URL
+  m as VITE_DEV_SERVER_URL
 };

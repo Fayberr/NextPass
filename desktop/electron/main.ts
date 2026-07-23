@@ -106,52 +106,39 @@ ipcMain.on('open-external', (_, url: string) => {
   }
 });
 
-// Seamless Google OAuth Handler with Persistent Chrome Session & Custom User-Agent
+// Google OAuth via system default browser + local loopback callback.
+// Google refuses to authenticate inside embedded Electron webviews
+// ("disallowed_useragent"), so the flow must open the OS browser and
+// receive the token back through a short-lived local HTTP listener.
+// This matches the redirect URI registered in Google Cloud Console
+// (https://password-manager.fayber.dev/oauth/callback), whose page
+// posts the token to http://127.0.0.1:28999/token.
+import http from 'node:http';
+
+function decodeJwt(idToken: string) {
+  const base64Url = idToken.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const json = Buffer.from(base64, 'base64').toString('utf-8');
+  return JSON.parse(json);
+}
+
 ipcMain.handle('google-oauth', async () => {
   return new Promise((resolve) => {
     const clientId = '103728403142-enre6hvcqo9palkbqgu3499d2uks1nfm.apps.googleusercontent.com';
-    const redirectUri = 'https://hfkiimdacpchmfglajeeghjagdecajbk.chromiumapp.org/';
+    const redirectUri = 'https://password-manager.fayber.dev/oauth/callback';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=id_token%20token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=openid%20email%20profile&prompt=select_account&nonce=nextpass`;
 
-    let resolved = false;
-
-    const authWindow = new BrowserWindow({
-      width: 520,
-      height: 640,
-      show: true,
-      autoHideMenuBar: true,
-      title: 'Sign in with Google — NextPass',
-      webPreferences: {
-        partition: 'persist:main',
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
-
-    // Set Chrome User-Agent so Google allows seamless browser authentication
-    authWindow.webContents.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
-    );
-
-    const handleUrl = (url: string) => {
-      if (url.includes('id_token=') || url.includes('access_token=')) {
-        try {
-          const hashIndex = url.indexOf('#');
-          const hash = hashIndex !== -1 ? url.substring(hashIndex + 1) : '';
-          const params = new URLSearchParams(hash);
-          const idToken = params.get('id_token');
-          if (idToken) {
-            const base64Url = idToken.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(
-              atob(base64)
-                .split('')
-                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                .join(''),
-            );
-            const jwt = JSON.parse(jsonPayload);
-            resolved = true;
-            try { authWindow.close(); } catch {}
+    let settled = false;
+    const server = http.createServer((req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      if (req.url && req.url.startsWith('/token')) {
+        const url = new URL(req.url, 'http://127.0.0.1:28999');
+        const idToken = url.searchParams.get('id_token');
+        res.end('ok');
+        if (idToken && !settled) {
+          settled = true;
+          try {
+            const jwt = decodeJwt(idToken);
             resolve({
               googleId: jwt.sub,
               email: jwt.email,
@@ -159,20 +146,28 @@ ipcMain.handle('google-oauth', async () => {
               picture: jwt.picture,
               idToken,
             });
+          } catch (e) {
+            console.error('[Google OAuth] Error parsing token:', e);
+            resolve(null);
           }
-        } catch (e) {
-          console.error('[Google OAuth] Error parsing token:', e);
+          server.close();
         }
+      } else {
+        res.end('');
       }
-    };
-
-    authWindow.webContents.on('will-navigate', (_, url) => handleUrl(url));
-    authWindow.webContents.on('will-redirect', (_, url) => handleUrl(url));
-
-    authWindow.on('closed', () => {
-      if (!resolved) resolve(null);
     });
 
-    authWindow.loadURL(authUrl);
+    server.listen(28999, '127.0.0.1', () => {
+      shell.openExternal(authUrl);
+    });
+
+    // Give up after 5 minutes so the promise never hangs forever.
+    setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try { server.close(); } catch {}
+        resolve(null);
+      }
+    }, 5 * 60 * 1000);
   });
 });

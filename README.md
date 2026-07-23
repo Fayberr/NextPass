@@ -1,54 +1,61 @@
-# Password Manager
+# NextPass — The next Generation Password Manager 🔒
 
-Self-hosted, zero-knowledge password manager. Personal use (Fabian + a few friends + mom).
-Built from scratch — **not** a Vaultwarden fork. Full design/source-of-truth lives in the
-shared brain vault: `~/brain/projects/password-manager.md`.
+Self-hosted, zero-knowledge password manager with automatic WebAuthn Passkey interception, one-click autofill, TOTP codes, bank cards, identities, secrets, and encrypted vault backup/import. Built from scratch — **not** a Vaultwarden fork.
 
-> Placeholder branding: the literal string **"Password Manager"** is used everywhere until a
-> real name is picked. Swapping it later is intentionally easy.
+Full design & specification lives in the shared brain vault: `~/brain/projects/password-manager.md`.
 
-## Monorepo layout
+## Monorepo Layout
 
-| Workspace    | Stack                              | Status              |
-|--------------|------------------------------------|---------------------|
-| `shared/`    | TS crypto + API types (portable)   | **Phase 0 (built)** |
-| `server/`    | Node.js + Fastify + SQLite         | **Phase 0 (built)** |
-| `extension/` | Manifest V3 (Chrome / Opera GX)    | placeholder (P1)    |
-| `desktop/`   | Electron                           | placeholder (P5)    |
-| `android/`   | Kotlin (native)                    | placeholder (P6)    |
+| Workspace | Stack | Description / Status |
+|---|---|---|
+| `shared/` | TS crypto + API types | **Phase 0 & 1 (Built)** — WebCrypto, Argon2id (WASM), BIP39 12-word recovery, AES-256-GCM, RSA-OAEP-4096 |
+| `server/` | Node.js + Fastify + SQLite | **Phase 0 (Deployed)** — Fastify REST API, SQLite (`pm.db`), systemd service (`password-manager-server.service`) |
+| `extension/` | Manifest V3 (Chrome / Edge / Opera GX) | **Phase 1 & 2 (Built & Deployed)** — React 18, Vite 5, Tailwind CSS, WebAuthn Proxy Shim, Purge Vault, Backup Import/Export |
+| `desktop/` | Electron | Phase 5 (Scaffold / Planned) |
+| `android/` | Kotlin (Native) | Phase 6 (Planned) |
 
-## Crypto model (summary)
+## Zero-Knowledge Security Model
 
-Zero-knowledge. The server only ever stores ciphertext + wrapped keys.
+The server only ever stores ciphertext and wrapped keys. No unencrypted credential material ever leaves the client.
 
-- **Master-password KDF:** Argon2id (m=64 MiB, t=3, p=1) → `masterKey` → HKDF-split into
-  `encKey` + `authKey`.
-- **Vault key** (AES-256) wrapped three ways: by `encKey` (normal login), by the **admin
-  RSA public key** (silent one-way admin access — baked invisibly into registration), and by
-  a **BIP39 recovery key**.
-- **Per-item keys** (AES-256), each wrapped by the vault key; optionally *also* wrapped by the
-  **automation RSA public key** when an item is flagged "exposed to automation".
-- **Symmetric:** AES-256-GCM (`iv‖ciphertext‖tag`). **Asymmetric:** RSA-OAEP-3072 / SHA-256.
+- **Master-Password KDF:** Argon2id (m=64MB, t=3, p=1) → `masterKey` → HKDF-split into `encKey` + `authKey`.
+- **Vault Key (AES-256):** Wrapped 3 ways:
+  - `wrapped_key_by_master_pw`: Master Password unwrap
+  - `wrapped_key_by_admin`: Silent 1-way admin unwrap (backed by RSA-4096 `admin-private.pem.cred` encrypted via `systemd-creds`)
+  - `wrapped_key_by_recovery`: 12-word BIP39 mnemonic unwrap
+- **Per-Item Keys (AES-256):** Each item is encrypted with its own item key, wrapped under the Vault Key.
+- **Symmetric Encryption:** AES-256-GCM (`IV ‖ Ciphertext ‖ Tag`).
 
-See `shared/src/crypto.ts` and `shared/src/register.ts`.
+## Features
 
-## Server
+- 🔑 **WebAuthn Passkey Interception**: Authoritative browser-level passkey provider (`chrome.webAuthenticationProxy`). Intercepts creation & assertion ceremonies.
+- ⚡ **One-Click Smart Autofill**: Detects login, card, and identity fields across static and SPA forms.
+- 🔐 **Zero-Knowledge Backup Import & Export**: Export and import encrypted or unencrypted `.json` backups with duplicate detection.
+- ☣️ **Vault Purge & Wiping**: Authenticated vault purge with optional automated backup export.
+- 🛡️ **Recovery Phrase**: 12-word BIP39 phrase export and unlock recovery flow.
+
+## Local Development & Server Setup
 
 ```bash
+# Install dependencies
 npm install
-npm run dev:server          # starts Fastify on http://127.0.0.1:8787
-npm test                    # crypto round-trip + server smoke tests
+
+# Build all workspaces
+npm run build
+
+# Start backend server locally (default: http://127.0.0.1:8787)
+npm run dev:server
+
+# Build extension
+npm run build:ext
 ```
 
-Config via env (see `server/src/config.ts`): `PM_PORT`, `PM_HOST`, `PM_DB_PATH`.
+### Server Configuration
+Server configuration is controlled via environment variables (see `server/src/config.ts`):
+- `PM_PORT`: Server HTTP port (default: `8787`)
+- `PM_HOST`: Host interface binding (default: `127.0.0.1`, set `0.0.0.0` for LAN)
+- `PM_DB_PATH`: SQLite database file path (default: `server/pm.db`)
 
-### Admin / automation keypairs
-
-The RSA **private** keys live **outside** this repo (`../password-manager-secrets/`, git-ignored)
-and are never sent to the server. Only the **public** keys are embedded in `shared/src/keys.ts`.
-Rotating them = regenerate + re-wrap existing vaults.
-
-## Deployment
-
-Runs on the Pi (`XyferNetPi`, 192.168.178.2) behind the existing nginx + Cloudflare tunnel.
-**Not yet deployed** — local development only until explicitly greenlit.
+### Deployment
+- **Server**: Deployed on Raspberry Pi (`XyferNetPi`, `192.168.178.2`) under systemd service (`password-manager-server.service`). Reached via Nginx reverse proxy / Cloudflare Tunnel at `https://password-manager.fayber.dev`.
+- **Extension**: Built via `vite build` (`extension/dist`) and deployed to Windows PC.

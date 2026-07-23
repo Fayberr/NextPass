@@ -1,0 +1,1 @@
+"use strict";const{contextBridge:i,ipcRenderer:e}=require("electron");i.exposeInMainWorld("electronAPI",{minimizeWindow:()=>e.send("window-minimize"),maximizeWindow:()=>e.send("window-maximize"),closeWindow:()=>e.send("window-close"),openExternal:n=>e.send("open-external",n),onQuickSearchToggle:n=>{e.on("toggle-quick-search",()=>n())}});

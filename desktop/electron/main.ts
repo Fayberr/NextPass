@@ -25,15 +25,24 @@ function createWindow() {
     backgroundColor: '#09090b',
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
+      preload: path.join(__dirname, 'preload.cjs'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer Console ${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (e, code, desc) => {
+    console.error(`[Load Error ${code}] ${desc}`);
+  });
+
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+    mainWindow?.webContents.openDevTools({ mode: 'detach' });
   });
 
   if (VITE_DEV_SERVER_URL) {

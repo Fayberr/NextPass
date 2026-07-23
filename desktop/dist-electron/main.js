@@ -1,13 +1,13 @@
-import { app as t, globalShortcut as a, BrowserWindow as c, ipcMain as s, shell as d } from "electron";
-import o from "node:path";
-import { fileURLToPath as m } from "node:url";
-const h = o.dirname(m(import.meta.url));
-process.env.APP_ROOT = o.join(h, "..");
-const r = process.env.VITE_DEV_SERVER_URL, g = o.join(process.env.APP_ROOT, "dist-electron"), p = o.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = r ? o.join(process.env.APP_ROOT, "public") : p;
+import { app as s, globalShortcut as c, BrowserWindow as d, ipcMain as r, shell as R } from "electron";
+import t from "node:path";
+import { fileURLToPath as _ } from "node:url";
+const h = t.dirname(_(import.meta.url));
+process.env.APP_ROOT = t.join(h, "..");
+const l = process.env.VITE_DEV_SERVER_URL, b = t.join(process.env.APP_ROOT, "dist-electron"), p = t.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = l ? t.join(process.env.APP_ROOT, "public") : p;
 let e = null;
-function l() {
-  e = new c({
+function a() {
+  e = new d({
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -17,48 +17,52 @@ function l() {
     backgroundColor: "#09090b",
     show: !1,
     webPreferences: {
-      preload: o.join(h, "preload.mjs"),
+      preload: t.join(h, "preload.cjs"),
       sandbox: !1,
       contextIsolation: !0,
       nodeIntegration: !1
     }
+  }), e.webContents.on("console-message", (n, o, i, f, m) => {
+    console.log(`[Renderer Console ${o}] ${i} (${m}:${f})`);
+  }), e.webContents.on("did-fail-load", (n, o, i) => {
+    console.error(`[Load Error ${o}] ${i}`);
   }), e.once("ready-to-show", () => {
-    e == null || e.show();
-  }), r ? e.loadURL(r) : e.loadFile(o.join(p, "index.html"));
+    e == null || e.show(), e == null || e.webContents.openDevTools({ mode: "detach" });
+  }), l ? e.loadURL(l) : e.loadFile(t.join(p, "index.html"));
 }
-t.whenReady().then(() => {
-  l();
+s.whenReady().then(() => {
+  a();
   try {
-    a.register("CommandOrControl+Alt+A", () => {
+    c.register("CommandOrControl+Alt+A", () => {
       e && (e.isMinimized() && e.restore(), e.focus(), e.webContents.send("toggle-quick-search"));
     });
   } catch (n) {
     console.error("Failed to register global hotkey:", n);
   }
-  t.on("activate", () => {
-    c.getAllWindows().length === 0 && l();
+  s.on("activate", () => {
+    d.getAllWindows().length === 0 && a();
   });
 });
-t.on("will-quit", () => {
-  a.unregisterAll();
+s.on("will-quit", () => {
+  c.unregisterAll();
 });
-t.on("window-all-closed", () => {
-  process.platform !== "darwin" && t.quit();
+s.on("window-all-closed", () => {
+  process.platform !== "darwin" && s.quit();
 });
-s.on("window-minimize", () => {
+r.on("window-minimize", () => {
   e == null || e.minimize();
 });
-s.on("window-maximize", () => {
+r.on("window-maximize", () => {
   e != null && e.isMaximized() ? e.unmaximize() : e == null || e.maximize();
 });
-s.on("window-close", () => {
+r.on("window-close", () => {
   e == null || e.close();
 });
-s.on("open-external", (n, i) => {
-  i && (i.startsWith("http://") || i.startsWith("https://")) && d.openExternal(i);
+r.on("open-external", (n, o) => {
+  o && (o.startsWith("http://") || o.startsWith("https://")) && R.openExternal(o);
 });
 export {
-  g as MAIN_DIST,
+  b as MAIN_DIST,
   p as RENDERER_DIST,
-  r as VITE_DEV_SERVER_URL
+  l as VITE_DEV_SERVER_URL
 };

@@ -1,5 +1,6 @@
 import { SessionManager } from './session.js';
 import type { Msg, MsgResult } from './messages.js';
+import { promptGoogleAuth } from './google-auth.js';
 
 const defaultSession = new SessionManager();
 
@@ -35,6 +36,39 @@ export async function handleMessage(msg: Msg, session: SessionManager = defaultS
 
       case 'ack_recovery':
         await session.ackRecovery();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'google_signin': {
+        const googleUser = await promptGoogleAuth();
+        if (!googleUser) {
+          return { ok: false, error: 'Google sign-in was cancelled or unavailable.' };
+        }
+        return { ok: true, kind: 'google_user', googleUser };
+      }
+
+      case 'google_auth': {
+        const res = await session.googleAuth(msg.serverUrl, msg.googleUser);
+        return { ok: true, kind: 'google_auth_result', res };
+      }
+
+      case 'link_google':
+        await session.linkGoogle(msg.googleId, msg.googleEmail);
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'unlink_google':
+        await session.unlinkGoogle();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'enable_device_unlock':
+        await session.enableDeviceUnlock();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'forget_device':
+        await session.forgetDevice();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'device_unlock':
+        await session.unlockWithDevice(msg.serverUrl, msg.googleUser);
         return { ok: true, kind: 'state', state: await session.getState() };
 
       case 'list_items':

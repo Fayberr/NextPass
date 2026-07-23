@@ -38,8 +38,8 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
       <input
         ref={ref}
         className={cx(
-          'w-full rounded-xl bg-white/5 border border-[rgba(255,255,255,0.07)] px-3 py-2 text-sm text-white/90',
-          'placeholder:text-white/30 outline-none focus:border-violet-soft/60 focus:bg-white/[0.07]',
+          'w-full rounded-xl bg-white/[0.04] border border-white/[0.1] px-3.5 py-2.5 text-sm text-zinc-100',
+          'placeholder:text-zinc-500 outline-none focus:border-violet-500/70 focus:ring-2 focus:ring-violet-500/20 focus:bg-white/[0.07] transition-all',
           className,
         )}
         {...props}

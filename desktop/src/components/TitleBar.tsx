@@ -20,15 +20,8 @@ export function TitleBar({
 
   return (
     <header className="app-drag h-12 bg-zinc-950/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-4 shrink-0 z-50 select-none">
-      {/* Brand & App Title */}
-      <div className="flex items-center gap-2.5">
-        <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
-          <ShieldCheck className="h-4 w-4 text-white" />
-        </div>
-        <span className="font-semibold text-sm tracking-tight text-white flex items-center gap-1.5">
-          NextPass <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30">Desktop</span>
-        </span>
-      </div>
+      {/* Spacer / Drag region on left */}
+      <div className="w-8" />
 
       {/* Center Integrated Search Bar */}
       {isUnlocked && (

@@ -376,13 +376,16 @@ export function Unlock({
             </div>
 
             {!configured && (
-              <div className="mb-3 flex rounded-full bg-white/5 p-1 text-xs">
+              <div className="mb-4 flex rounded-xl bg-white/[0.04] p-1 text-xs border border-white/[0.08]">
                 {(['login', 'register'] as const).map((m) => (
                   <button
                     key={m}
+                    type="button"
                     onClick={() => setMode(m)}
-                    className={`flex-1 rounded-full py-1.5 font-medium transition ${
-                      mode === m ? 'bg-violet-glow text-white' : 'text-white/50'
+                    className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
+                      mode === m
+                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/30'
+                        : 'text-zinc-400 hover:text-white'
                     }`}
                   >
                     {m === 'login' ? 'Log in' : 'Register'}

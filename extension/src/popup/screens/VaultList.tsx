@@ -23,6 +23,7 @@ import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
 import { TotpCode } from '../TotpCode.js';
 import { baseDomain } from '@pm/shared';
+import { externalFaviconSources, transparentFavicon } from '../../lib/favicon.js';
 import type { ItemSummary } from '../../lib/messages.js';
 import type { Category } from '../Sidebar.js';
 
@@ -77,70 +78,15 @@ function hostnameOf(uris: string[]): string | null {
   }
 }
 
-const faviconTransparentCache = new Map<string, string>();
-
-async function getTransparentFavicon(rawUrl: string): Promise<string> {
-  if (faviconTransparentCache.has(rawUrl)) {
-    return faviconTransparentCache.get(rawUrl)!;
-  }
-
-  if (rawUrl.startsWith('chrome-extension://')) {
-    faviconTransparentCache.set(rawUrl, rawUrl);
-    return rawUrl;
-  }
-
-  try {
-    const res = await fetch(rawUrl);
-    if (!res.ok) return rawUrl;
-    const blob = await res.blob();
-    const bitmap = await createImageBitmap(blob);
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return rawUrl;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bitmap, 0, 0);
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imgData.data;
-
-    const w = canvas.width;
-    const h = canvas.height;
-    const cornerIndices = [
-      0,
-      (w - 1) * 4,
-      (h - 1) * w * 4,
-      (h * w - 1) * 4,
-    ];
-
-    const isWhiteBackground = cornerIndices.every(
-      (idx) => data[idx] >= 235 && data[idx + 1] >= 235 && data[idx + 2] >= 235
-    );
-
-    if (isWhiteBackground) {
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i] >= 235 && data[i + 1] >= 235 && data[i + 2] >= 235) {
-          data[i + 3] = 0;
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-      const transparentDataUrl = canvas.toDataURL('image/png');
-      faviconTransparentCache.set(rawUrl, transparentDataUrl);
-      return transparentDataUrl;
-    }
-
-    faviconTransparentCache.set(rawUrl, rawUrl);
-    return rawUrl;
-  } catch {
-    faviconTransparentCache.set(rawUrl, rawUrl);
-    return rawUrl;
-  }
-}
-
-/** Multi-stage transparent favicon renderer.
- *  - Strips white background mattes dynamically to 100% transparency.
- *  - High-quality image smoothing & crisp high-dpi rendering.
+/** Favicon renderer, backed by the shared `lib/favicon.ts` pipeline.
+ *  - Tries Google then DuckDuckGo's icon CDNs, skipping either one if it turns out to be an
+ *    "unknown domain" placeholder rather than a real icon (see lib/favicon.ts).
+ *  - Requests a high enough resolution to stay crisp scaled up in the card grid.
+ *  - Flood-fills any flat white background matte to transparent without eating white pixels
+ *    that are part of the logo's own artwork.
+ *  - Falls back to Chrome's own favicon cache (exact tab icon, already correctly transparent)
+ *    first for our own fayber.dev domain (Google/DDG won't have indexed a private site), and
+ *    last for everything else, before giving up and showing an initial-letter placeholder.
  */
 function FaviconIcon({
   uris,
@@ -151,83 +97,60 @@ function FaviconIcon({
   name: string;
   fallbackIcon?: any;
 }) {
-  const domain = hostnameOf(uris);
-  const baseDom = domain ? baseDomain(domain) : null;
-  const isFayberDomain = domain?.endsWith('fayber.dev');
-  const primaryFav = faviconFor(uris);
-
-  const [src, setSrc] = useState<string | null>(null);
-  const [step, setStep] = useState<'google' | 'duck' | 'chrome' | 'none'>('none');
+  const [state, setState] = useState<{ src: string | null; isChrome: boolean }>({
+    src: null,
+    isChrome: false,
+  });
 
   useEffect(() => {
     let active = true;
     const d = hostnameOf(uris);
     const bd = d ? baseDomain(d) : null;
     const isF = d?.endsWith('fayber.dev');
-    const f = faviconFor(uris);
+    const chromeUrl = faviconFor(uris);
 
-    async function loadFavicon() {
-      let targetUrl: string | null = null;
-      let nextStep: 'google' | 'duck' | 'chrome' | 'none' = 'none';
-
-      if (isF && f) {
-        targetUrl = f;
-        nextStep = 'chrome';
-      } else if (d || bd) {
-        const target = d || bd;
-        targetUrl = `https://www.google.com/s2/favicons?domain=${target}&sz=128`;
-        nextStep = 'google';
-      } else if (f) {
-        targetUrl = f;
-        nextStep = 'chrome';
+    async function load() {
+      if (isF && chromeUrl) {
+        if (active) setState({ src: chromeUrl, isChrome: true });
+        return;
       }
 
-      if (!active) return;
-
-      if (targetUrl) {
-        setStep(nextStep);
-        const transparentUrl = await getTransparentFavicon(targetUrl);
-        if (active) setSrc(transparentUrl);
-      } else {
-        setStep('none');
-        setSrc(null);
+      const domain = d || bd;
+      if (domain) {
+        for (const source of externalFaviconSources(domain)) {
+          const { src, ok } = await transparentFavicon(source);
+          if (!active) return;
+          if (ok) {
+            setState({ src, isChrome: false });
+            return;
+          }
+        }
       }
+
+      if (chromeUrl) {
+        if (active) setState({ src: chromeUrl, isChrome: true });
+        return;
+      }
+
+      if (active) setState({ src: null, isChrome: false });
     }
 
-    void loadFavicon();
+    void load();
 
     return () => {
       active = false;
     };
   }, [uris]);
 
-  const handleError = () => {
-    if (step === 'google' && baseDom) {
-      setStep('duck');
-      const target = `https://icons.duckduckgo.com/ip3/${baseDom}.ico`;
-      void getTransparentFavicon(target).then((tUrl) => setSrc(tUrl));
-    } else if (step === 'duck') {
-      const f = faviconFor(uris);
-      if (f) {
-        setStep('chrome');
-        setSrc(f);
-      } else {
-        setStep('none');
-        setSrc(null);
-      }
-    } else {
-      setStep('none');
-      setSrc(null);
-    }
-  };
+  const handleError = () => setState({ src: null, isChrome: false });
 
-  if (src && step !== 'none') {
+  if (state.src) {
     return (
       <img
-        src={src}
+        src={state.src}
         alt=""
-        onError={handleError}
-        className="h-full w-full rounded-md object-cover"
+        onError={state.isChrome ? handleError : undefined}
+        className="h-full w-full rounded-md object-contain"
         style={{ imageRendering: '-webkit-optimize-contrast' }}
       />
     );

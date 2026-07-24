@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Globe } from './icons';
+import { useEffect, useState } from 'react';
+import { externalFaviconSources, transparentFavicon } from '../../../extension/src/lib/favicon';
 
 interface FaviconProps {
   url?: string;
@@ -7,33 +7,44 @@ interface FaviconProps {
   size?: number;
 }
 
+/** Same shared favicon pipeline as the main vault list (see extension/src/lib/favicon.ts): tries
+ *  Google then DuckDuckGo at a high resolution, skips generic "unknown domain" placeholders, and
+ *  flood-fills any flat white background matte to transparent. Keeps the quick-search overlay's
+ *  icons visually consistent with the main window instead of the old plain/opaque favicon.ico. */
 export function Favicon({ url, title, size = 24 }: FaviconProps) {
-  const [stage, setStage] = useState<number>(0);
+  const [src, setSrc] = useState<string | null>(null);
 
-  if (!url) {
-    return (
-      <div
-        className="rounded-md bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold uppercase shrink-0"
-        style={{ width: size, height: size, fontSize: size * 0.45 }}
-      >
-        {title.charAt(0) || '?'}
-      </div>
-    );
-  }
+  useEffect(() => {
+    let active = true;
+    setSrc(null);
+    if (!url) return;
 
-  let domain = url;
-  try {
-    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
-    domain = parsed.hostname;
-  } catch {}
+    let domain: string;
+    try {
+      domain = new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    } catch {
+      return;
+    }
 
-  const sources = [
-    `https://${domain}/favicon.ico`,
-    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-  ];
+    async function load() {
+      for (const source of externalFaviconSources(domain)) {
+        const { src: resolved, ok } = await transparentFavicon(source);
+        if (!active) return;
+        if (ok) {
+          setSrc(resolved);
+          return;
+        }
+      }
+    }
 
-  if (stage >= sources.length) {
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [url]);
+
+  if (!src) {
     return (
       <div
         className="rounded-md bg-white/10 text-white/50 border border-white/10 flex items-center justify-center font-bold uppercase shrink-0"
@@ -46,9 +57,8 @@ export function Favicon({ url, title, size = 24 }: FaviconProps) {
 
   return (
     <img
-      src={sources[stage]}
+      src={src}
       alt={title}
-      onError={() => setStage((prev) => prev + 1)}
       className="rounded-md object-contain shrink-0 bg-transparent"
       style={{ width: size, height: size }}
     />

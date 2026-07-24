@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Textarea } from '../ui.js';
+import { Button, Textarea, Field, Select } from '../ui.js';
 import { ArrowLeft, Upload, Check, ShieldCheck } from '../icons.js';
 import { send } from '../client.js';
 import {
@@ -7,21 +7,42 @@ import {
   dedupeKeyForExisting,
   type ParsedImportEntry,
 } from '../../lib/kaspersky-import.js';
+import {
+  looksLikeCsv,
+  parseCsv,
+  guessMapping,
+  mappingUsable,
+  csvToEntries,
+  type CsvTable,
+  type CsvMapping,
+} from '../../lib/csv-import.js';
 
 /**
- * Import screen: paste or upload a Kaspersky Password Manager plaintext export, parse it
- * client-side, dedupe against what's already in the vault, then create each new item through the
- * normal `create_login` message - same encrypted-item-creation path as the manual "Add login"
- * form. This has to happen here (inside an unlocked popup session) rather than as a CLI/server
- * script: the vault is zero-knowledge, so encryption only ever happens with the vault key that
- * lives in the background worker's memory while unlocked.
+ * Import screen: paste or upload a password export - a browser CSV (Chrome/Edge/Firefox/Safari,
+ * auto-detected by header; unknown headers get a manual column-mapping step) or a Kaspersky
+ * Password Manager plaintext export - parse it client-side, dedupe against what's already in the
+ * vault, then create each new item through the normal `create_login` message - same
+ * encrypted-item-creation path as the manual "Add login" form. This has to happen here (inside an
+ * unlocked popup session) rather than as a CLI/server script: the vault is zero-knowledge, so
+ * encryption only ever happens with the vault key that lives in the background worker's memory
+ * while unlocked.
  */
 
 type Stage =
   | { name: 'input' }
+  | { name: 'map'; table: CsvTable; mapping: CsvMapping }
   | { name: 'preview'; entries: ParsedImportEntry[]; dupeKeys: Set<string>; skippedBlocks: number }
   | { name: 'importing'; total: number; done: number }
   | { name: 'done'; imported: number; skippedDupes: number; failed: string[] };
+
+/** The five mappable login fields, in UI order, for the manual column-mapping step. */
+const MAP_FIELDS: { key: keyof CsvMapping; label: string }[] = [
+  { key: 'name', label: 'Item name' },
+  { key: 'url', label: 'Website URL' },
+  { key: 'username', label: 'Username / Email' },
+  { key: 'password', label: 'Password' },
+  { key: 'notes', label: 'Notes' },
+];
 
 export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [text, setText] = useState('');
@@ -38,15 +59,10 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     e.target.value = ''; // allow re-selecting the same file later
   }
 
-  async function parse() {
-    setError(null);
-    if (!text.trim()) {
-      setError('Paste the export text or choose a file first.');
-      return;
-    }
-    const { entries, skipped } = parseKasperskyExport(text);
+  /** Shared tail of both import paths: dedupe parsed entries against the vault, show preview. */
+  async function toPreview(entries: ParsedImportEntry[], skipped: number) {
     if (entries.length === 0) {
-      setError("No entries found - check this matches Kaspersky's plaintext export format.");
+      setError('No entries found - expected a browser CSV export or a Kaspersky plaintext export.');
       return;
     }
     setBusy(true);
@@ -59,6 +75,32 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     setBusy(false);
     setStage({ name: 'preview', entries, dupeKeys, skippedBlocks: skipped });
     setText(''); // the structured entries are all we need from here - drop the raw plaintext blob
+  }
+
+  async function parse() {
+    setError(null);
+    if (!text.trim()) {
+      setError('Paste the export text or choose a file first.');
+      return;
+    }
+    // CSV first: recognized headers (Chrome/Edge/Firefox/Safari & friends) go straight to
+    // preview; a real CSV with unknown headers gets the manual column-mapping step instead.
+    if (looksLikeCsv(text)) {
+      const table = parseCsv(text);
+      if (table) {
+        const mapping = guessMapping(table.headers);
+        if (mappingUsable(mapping)) {
+          const { entries, skipped } = csvToEntries(table, mapping);
+          await toPreview(entries, skipped);
+        } else {
+          setStage({ name: 'map', table, mapping });
+          setText('');
+        }
+        return;
+      }
+    }
+    const { entries, skipped } = parseKasperskyExport(text);
+    await toPreview(entries, skipped);
   }
 
   async function runImport() {
@@ -81,22 +123,29 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
         <Button variant="subtle" onClick={onCancel}>
           <ArrowLeft size={16} /> Cancel
         </Button>
-        <span className="text-sm font-semibold">Import from Kaspersky</span>
+        <span className="text-sm font-semibold">Import Passwords</span>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
         {stage.name === 'input' && (
           <>
             <p className="mb-3 text-xs leading-relaxed text-white/50">
-              Paste the contents of a Kaspersky Password Manager plaintext export below, or choose
-              the exported <span className="font-mono text-white/70">.txt</span> file. Nothing
-              leaves your device - parsing happens here, and each item is saved the same way as a
-              manually-added login.
+              Import a password export from your browser - Chrome, Edge, Firefox or Safari{' '}
+              <span className="font-mono text-white/70">.csv</span> (in Chrome:{' '}
+              <span className="text-white/70">Settings → Passwords → Export passwords</span>) - or
+              a Kaspersky Password Manager plaintext <span className="font-mono text-white/70">.txt</span>.
+              Choose the file or paste its contents below. Nothing leaves your device - parsing
+              happens here, and each item is saved the same way as a manually-added login.
             </p>
             <label className="mb-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[rgba(255,255,255,0.15)] bg-white/[0.03] py-3 text-sm text-white/60 hover:bg-white/[0.06]">
               <Upload size={15} />
               Choose file…
-              <input type="file" accept=".txt,text/plain" className="hidden" onChange={onFile} />
+              <input
+                type="file"
+                accept=".txt,.csv,text/plain,text/csv"
+                className="hidden"
+                onChange={onFile}
+              />
             </label>
             <Textarea
               value={text}
@@ -106,6 +155,44 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
               className="font-mono text-[11px]"
             />
             {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+          </>
+        )}
+
+        {stage.name === 'map' && (
+          <>
+            <p className="mb-3 text-xs leading-relaxed text-white/50">
+              This CSV's column names weren't recognized. Match each field to the right column
+              (<span className="text-white/70">{stage.table.rows.length}</span> row
+              {stage.table.rows.length === 1 ? '' : 's'} found).
+            </p>
+            <div className="space-y-3">
+              {MAP_FIELDS.map(({ key, label }) => (
+                <Field key={key} label={label}>
+                  <Select<number>
+                    value={stage.mapping[key] ?? -1}
+                    options={[
+                      { value: -1, label: '— not in this file —' },
+                      ...stage.table.headers.map((h, i) => ({
+                        value: i,
+                        label: h || `Column ${i + 1}`,
+                      })),
+                    ]}
+                    onChange={(v) =>
+                      setStage((s) =>
+                        s.name === 'map'
+                          ? { ...s, mapping: { ...s.mapping, [key]: v === -1 ? null : v } }
+                          : s,
+                      )
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+            {!mappingUsable(stage.mapping) && (
+              <p className="mt-3 text-xs text-amber-400">
+                Select at least the Password column plus a name, URL or username column.
+              </p>
+            )}
           </>
         )}
 
@@ -207,6 +294,23 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
           <Button className="w-full" onClick={parse} disabled={busy || !text.trim()}>
             {busy ? 'Checking…' : 'Parse'}
           </Button>
+        )}
+        {stage.name === 'map' && (
+          <>
+            <Button variant="subtle" onClick={() => setStage({ name: 'input' })}>
+              Back
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={!mappingUsable(stage.mapping) || busy}
+              onClick={() => {
+                const { entries, skipped } = csvToEntries(stage.table, stage.mapping);
+                void toPreview(entries, skipped);
+              }}
+            >
+              {busy ? 'Checking…' : 'Continue'}
+            </Button>
+          </>
         )}
         {stage.name === 'preview' && (
           <>

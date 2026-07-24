@@ -44,7 +44,9 @@ function normalizeText(text: string): string {
   return text.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
-/** Split the export into "---"-delimited blocks. Section headers (e.g. a lone "Websites" line)
+/** Split the export into dash-delimited blocks. Kaspersky uses exactly "---"; other text-style
+ *  password dumps (e.g. some browser/recovery tools) use longer dash runs, so any line that is
+ *  nothing but 3+ dashes counts as a separator. Section headers (e.g. a lone "Websites" line)
  *  just ride along inside whichever block they precede - they don't match the KV regexes below,
  *  so they're harmlessly ignored rather than needing special-case handling. */
 function splitBlocks(text: string): string[][] {
@@ -52,7 +54,7 @@ function splitBlocks(text: string): string[][] {
   const blocks: string[][] = [];
   let current: string[] = [];
   for (const raw of lines) {
-    if (raw.trim() === '---') {
+    if (/^-{3,}$/.test(raw.trim())) {
       blocks.push(current);
       current = [];
     } else {
@@ -89,8 +91,9 @@ function looksLikeRealHost(hostname: string): boolean {
 
 /** Best-effort "does this look like a real website" check + https:// prefixing. Kaspersky often
  *  stores bare domains ("gmx.net") but sometimes a non-URL app identifier ("txadmin") under the
- *  same "Website URL" key - only the former should become an autofill-matchable URI. */
-function normalizeUrl(raw: string): string | null {
+ *  same "Website URL" key - only the former should become an autofill-matchable URI.
+ *  (Exported for reuse by the browser-CSV importer, csv-import.ts.) */
+export function normalizeUrl(raw: string): string | null {
   const v = raw.trim();
   if (!v) return null;
   // Preserve whatever scheme the export already had (e.g. "http://localhost"); default to https.
@@ -112,8 +115,9 @@ function normalizeUrl(raw: string): string | null {
  * caught during testing (it silently ate 3 of 4 real *.fayber.dev logins) and would have dropped
  * real passwords. A false NEGATIVE (importing an actual duplicate twice) is the safe failure mode
  * for a one-shot import - the user can merge/delete afterward - a false positive is not.
+ * (Exported for reuse by the browser-CSV importer, csv-import.ts.)
  */
-function dedupeKeyFor(uris: string[], identifier: string, name: string): string {
+export function dedupeKeyFor(uris: string[], identifier: string, name: string): string {
   let host = '';
   for (const u of uris) {
     const withProto = /^https?:\/\//i.test(u) ? u : `https://${u}`;
@@ -147,12 +151,19 @@ function blockToEntry(kv: KV[]): ParsedImportEntry | null {
         if (!title && value.trim()) title = value.trim();
         break;
       case 'website url':
+      case 'url':
+      case 'website':
+      case 'web site':
         if (value.trim()) url = value.trim();
         break;
       case 'login name':
         if (value.trim()) loginName = value.trim();
         break;
       case 'login':
+      case 'username':
+      case 'user name':
+      case 'user':
+      case 'email':
         if (value.trim()) login = value.trim();
         break;
       case 'password':

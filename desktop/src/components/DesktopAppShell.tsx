@@ -21,6 +21,7 @@ export function DesktopAppShell({
   syncing,
   onHealth,
   onSettings,
+  onImport,
   children,
 }: AppShellProps) {
   return (
@@ -34,7 +35,13 @@ export function DesktopAppShell({
         counts={counts}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <DesktopTopBar search={search} onLock={onLock} onSync={onSync} syncing={syncing} />
+        <DesktopTopBar
+          search={search}
+          onLock={onLock}
+          onSync={onSync}
+          syncing={syncing}
+          onImport={onImport}
+        />
         <div className="min-h-0 flex-1">{children}</div>
       </div>
     </div>

@@ -4,6 +4,20 @@ import type { ReactNode } from 'react';
 import { Sidebar, type Category } from './Sidebar.js';
 import { TopBar } from './TopBar.js';
 
+export interface AppShellProps {
+  active: Category | 'generator';
+  onSelectCategory: (c: Category) => void;
+  onGenerator: () => void;
+  search?: { value: string; onChange: (v: string) => void };
+  onLock: () => void;
+  onSync: () => void;
+  syncing: boolean;
+  onHealth: () => void;
+  onSettings: () => void;
+  onImport: () => void;
+  children: ReactNode;
+}
+
 export function AppShell({
   active,
   onSelectCategory,
@@ -16,19 +30,7 @@ export function AppShell({
   onSettings,
   onImport,
   children,
-}: {
-  active: Category | 'generator';
-  onSelectCategory: (c: Category) => void;
-  onGenerator: () => void;
-  search?: { value: string; onChange: (v: string) => void };
-  onLock: () => void;
-  onSync: () => void;
-  syncing: boolean;
-  onHealth: () => void;
-  onSettings: () => void;
-  onImport: () => void;
-  children: ReactNode;
-}) {
+}: AppShellProps) {
   return (
     <div className="flex h-full min-h-[560px]">
       <Sidebar active={active} onSelect={onSelectCategory} onGenerator={onGenerator} />

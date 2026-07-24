@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { send } from './client.js';
 import { Unlock } from './screens/Unlock.js';
 import { Recovery } from './screens/Recovery.js';
@@ -15,7 +15,7 @@ import { Generator } from './screens/Generator.js';
 import { Health } from './screens/Health.js';
 import { Settings } from './screens/Settings.js';
 import { Import } from './screens/Import.js';
-import { AppShell } from './AppShell.js';
+import { AppShell, type AppShellProps } from './AppShell.js';
 import type { Category } from './Sidebar.js';
 import type { VaultState } from '../lib/messages.js';
 import type {
@@ -69,7 +69,13 @@ function savePopupState(v: View, c: Category) {
   } catch {}
 }
 
-export function App() {
+/**
+ * `Shell` renders the persistent chrome (icon rail + top bar) around whatever screen is active.
+ * Defaults to the Kaspersky-style popup shell; the desktop app passes its own bigger, more
+ * spacious shell (see desktop/src/components/DesktopAppShell.tsx) since it has room a 360px
+ * extension popup doesn't. Everything else here - state, routing, screens - stays identical.
+ */
+export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => ReactElement } = {}) {
   const [state, setState] = useState<VaultState | null>(null);
   const [view, setView] = useState<View>({ name: 'list' });
   const [category, setCategory] = useState<Category>('login');
@@ -308,7 +314,7 @@ export function App() {
   }
 
   return (
-    <AppShell
+    <Shell
       active={view.name === 'generator' ? 'generator' : category}
       onSelectCategory={updateCategory}
       onGenerator={() => updateView({ name: 'generator' })}
@@ -321,6 +327,6 @@ export function App() {
       onImport={() => updateView({ name: 'import' })}
     >
       {content}
-    </AppShell>
+    </Shell>
   );
 }

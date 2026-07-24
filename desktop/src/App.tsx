@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App as ExtensionApp } from '../../extension/src/popup/App';
 import { TitleBar } from './components/TitleBar';
 import { QuickSearchOverlay } from './components/QuickSearchOverlay';
+import { DesktopAppShell } from './components/DesktopAppShell';
 
 export default function App() {
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
@@ -28,7 +29,7 @@ export default function App() {
 
       {/* Main Extension App Shell & Real Crypto Session Backend */}
       <main className="flex-1 min-h-0 relative overflow-hidden">
-        <ExtensionApp />
+        <ExtensionApp Shell={DesktopAppShell} />
       </main>
 
       {/* Global Quick Search Overlay (Ctrl+Alt+A) */}

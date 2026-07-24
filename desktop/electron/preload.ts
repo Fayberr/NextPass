@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   googleOAuth: () => ipcRenderer.invoke('google-oauth'),
   desktopSettingsGet: () => ipcRenderer.invoke('desktop-settings-get'),
   desktopSettingsSet: (patch: Record<string, unknown>) => ipcRenderer.invoke('desktop-settings-set', patch),
+  chromeImport: () => ipcRenderer.invoke('chrome-import'),
   onQuickSearchToggle: (callback: () => void) => {
     ipcRenderer.on('toggle-quick-search', () => callback());
   },

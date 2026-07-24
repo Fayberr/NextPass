@@ -186,3 +186,68 @@ export function csvToEntries(table: CsvTable, m: CsvMapping): ParseResult {
 
   return { entries, skipped };
 }
+
+/** A raw credential pulled straight from a browser's decrypted password store (see the desktop
+ *  `chrome-import` IPC handler). Same shape a browser CSV boils down to, minus the CSV plumbing. */
+export interface BrowserCredential {
+  url: string;
+  username: string;
+  password: string;
+}
+
+/**
+ * Turn decrypted browser credentials into ParsedImportEntry records for the shared preview/import
+ * pipeline. Mirrors csvToEntries' title/identifier/dedupe logic so a direct browser import and a
+ * CSV import of the same store produce identical items - the only difference is where the rows came
+ * from (an IPC-decrypted SQLite store vs. a pasted CSV).
+ */
+export function entriesFromCredentials(creds: BrowserCredential[]): ParseResult {
+  const entries: ParsedImportEntry[] = [];
+  let skipped = 0;
+
+  for (const c of creds) {
+    const rawUrl = (c.url ?? '').trim();
+    const identifier = (c.username ?? '').trim();
+    const password = c.password ?? '';
+
+    if (!rawUrl && !identifier && !password) {
+      skipped++;
+      continue;
+    }
+
+    const normUrl = rawUrl ? normalizeUrl(rawUrl) : null;
+    const uris = normUrl ? [normUrl] : [];
+
+    let title = '';
+    if (normUrl) {
+      try {
+        title = new URL(normUrl).hostname.replace(/^www\./, '');
+      } catch {}
+    }
+    if (!title) title = identifier || 'Imported login';
+
+    let username: string | undefined;
+    let email: string | undefined;
+    if (identifier) {
+      if (identifier.includes('@')) email = identifier;
+      else username = identifier;
+    }
+
+    const notesParts: string[] = [];
+    if (rawUrl && !normUrl) notesParts.push(`Site: ${rawUrl}`);
+
+    const fields: LoginFields = {
+      name: title,
+      username,
+      email,
+      password: password || undefined,
+      uris,
+      matchMode: 'base_domain',
+      notes: notesParts.length ? notesParts.join('\n') : undefined,
+    };
+
+    entries.push({ fields, key: dedupeKeyFor(uris, identifier, title) });
+  }
+
+  return { entries, skipped };
+}

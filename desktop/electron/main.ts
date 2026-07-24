@@ -1,7 +1,11 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut, shell, safeStorage } from 'electron';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import initSqlJs from 'sql.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -285,4 +289,175 @@ ipcMain.handle('google-oauth', async () => {
       }
     }, 5 * 60 * 1000);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Direct Chrome password-store import (Windows).
+//
+// Reads Chrome's own encrypted credential store instead of asking the user to
+// export a CSV first. The store is:
+//   %LOCALAPPDATA%\Google\Chrome\User Data\<Profile>\Login Data   (SQLite)
+// whose password_value blobs are AES-256-GCM encrypted ("v10"/"v11" prefix)
+// with a per-user key kept, DPAPI-wrapped, in ...\User Data\Local State
+// (os_crypt.encrypted_key, base64, "DPAPI" 5-byte prefix). We DPAPI-unwrap the
+// key via PowerShell's ProtectedData (no native module needed), open a copy of
+// the SQLite file with sql.js (pure-wasm), and decrypt each blob with node's
+// crypto. Newer "v20" app-bound blobs can't be decrypted outside Chrome itself,
+// so those are counted and reported rather than failing the whole import.
+// Everything stays on-device; nothing here is persisted or sent anywhere.
+// ---------------------------------------------------------------------------
+
+interface BrowserCredential {
+  url: string;
+  username: string;
+  password: string;
+}
+
+interface ChromeImportResult {
+  ok: boolean;
+  error?: string;
+  credentials?: BrowserCredential[];
+  /** Blobs we couldn't decrypt (e.g. Chrome's newer app-bound "v20" encryption). */
+  undecryptable?: number;
+  profiles?: number;
+}
+
+/** Chrome must be closed - it holds a lock on Login Data, and copying a live DB risks a torn read. */
+function isChromeRunning(): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile('tasklist', ['/FI', 'IMAGENAME eq chrome.exe', '/NH'], (err, stdout) => {
+      if (err) return resolve(false);
+      resolve(/chrome\.exe/i.test(stdout));
+    });
+  });
+}
+
+/** DPAPI-unwrap the base64 os_crypt key via PowerShell (avoids a native DPAPI module). Returns the
+ *  raw 32-byte AES key. The encrypted blob is passed through an env var to sidestep shell quoting. */
+function dpapiUnprotect(b64: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const script =
+      'Add-Type -AssemblyName System.Security; ' +
+      '$b=[Convert]::FromBase64String($env:NP_ENC_KEY); ' +
+      "$k=[System.Security.Cryptography.ProtectedData]::Unprotect($b,$null,'CurrentUser'); " +
+      '[Convert]::ToBase64String($k)';
+    execFile(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { env: { ...process.env, NP_ENC_KEY: b64 }, maxBuffer: 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return reject(err);
+        try {
+          resolve(Buffer.from(stdout.trim(), 'base64'));
+        } catch (e) {
+          reject(e);
+        }
+      },
+    );
+  });
+}
+
+/** Decrypt one Chrome password blob. Returns null for anything we can't handle (v20 app-bound,
+ *  legacy DPAPI-only blobs, or a GCM auth failure) so the caller can count it as undecryptable. */
+function decryptChromePassword(blob: Buffer, key: Buffer): string | null {
+  if (blob.length < 3 + 12 + 16) return null;
+  const prefix = blob.subarray(0, 3).toString('latin1');
+  if (prefix !== 'v10' && prefix !== 'v11') return null; // v20 = app-bound, undecryptable here
+  const nonce = blob.subarray(3, 15);
+  const tag = blob.subarray(blob.length - 16);
+  const ciphertext = blob.subarray(15, blob.length - 16);
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, nonce);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
+  } catch {
+    return null;
+  }
+}
+
+ipcMain.handle('chrome-import', async (): Promise<ChromeImportResult> => {
+  try {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: 'Direct browser import is only available on Windows.' };
+    }
+    if (await isChromeRunning()) {
+      return { ok: false, error: 'Please fully close Google Chrome, then try again.' };
+    }
+
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    const userDataDir = path.join(localAppData, 'Google', 'Chrome', 'User Data');
+    if (!fs.existsSync(userDataDir)) {
+      return { ok: false, error: 'No Google Chrome installation was found for this user.' };
+    }
+
+    // Unwrap the AES key from Local State.
+    const localStatePath = path.join(userDataDir, 'Local State');
+    let key: Buffer;
+    try {
+      const localState = JSON.parse(fs.readFileSync(localStatePath, 'utf-8'));
+      const encKeyB64: string | undefined = localState?.os_crypt?.encrypted_key;
+      if (!encKeyB64) return { ok: false, error: "Couldn't read Chrome's encryption key." };
+      const encKey = Buffer.from(encKeyB64, 'base64');
+      // Strip the 5-byte "DPAPI" prefix before unwrapping.
+      const dpapiBlob = encKey.subarray(5);
+      key = await dpapiUnprotect(dpapiBlob.toString('base64'));
+    } catch {
+      return { ok: false, error: "Couldn't decrypt Chrome's encryption key (Windows DPAPI)." };
+    }
+
+    // sql.js loads its wasm from beside the bundled main.js (see vite.config copySqlWasm).
+    const SQL = await initSqlJs({ locateFile: () => path.join(__dirname, 'sql-wasm.wasm') });
+
+    // Enumerate profiles: "Default" plus any "Profile N".
+    const profiles = fs
+      .readdirSync(userDataDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && (d.name === 'Default' || /^Profile \d+$/.test(d.name)))
+      .map((d) => d.name);
+
+    const credentials: BrowserCredential[] = [];
+    let undecryptable = 0;
+    let profilesWithData = 0;
+
+    for (const profile of profiles) {
+      const loginDataPath = path.join(userDataDir, profile, 'Login Data');
+      if (!fs.existsSync(loginDataPath)) continue;
+      // Copy to temp so we never touch (or lock) Chrome's live file.
+      const tmpCopy = path.join(os.tmpdir(), `nextpass-logindata-${Date.now()}-${profile.replace(/\W/g, '')}`);
+      try {
+        fs.copyFileSync(loginDataPath, tmpCopy);
+        const db = new SQL.Database(fs.readFileSync(tmpCopy));
+        try {
+          const res = db.exec('SELECT origin_url, username_value, password_value FROM logins');
+          if (res.length > 0) {
+            profilesWithData++;
+            for (const row of res[0]!.values) {
+              const url = String(row[0] ?? '');
+              const username = String(row[1] ?? '');
+              const blob = row[2];
+              if (!(blob instanceof Uint8Array) || blob.length === 0) {
+                if (url || username) undecryptable++;
+                continue;
+              }
+              const password = decryptChromePassword(Buffer.from(blob), key);
+              if (password === null) {
+                undecryptable++;
+                continue;
+              }
+              credentials.push({ url, username, password });
+            }
+          }
+        } finally {
+          db.close();
+        }
+      } catch {
+        // A single unreadable profile shouldn't abort the whole import.
+      } finally {
+        try { fs.unlinkSync(tmpCopy); } catch {}
+      }
+    }
+
+    return { ok: true, credentials, undecryptable, profiles: profilesWithData };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Chrome import failed.' };
+  }
 });

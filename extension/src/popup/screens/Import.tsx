@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Textarea, Field, Select } from '../ui.js';
-import { ArrowLeft, Upload, Check, ShieldCheck } from '../icons.js';
+import { ArrowLeft, Upload, Check, ShieldCheck, Chrome } from '../icons.js';
 import { send } from '../client.js';
 import {
   parseKasperskyExport,
@@ -13,9 +13,30 @@ import {
   guessMapping,
   mappingUsable,
   csvToEntries,
+  entriesFromCredentials,
   type CsvTable,
   type CsvMapping,
 } from '../../lib/csv-import.js';
+
+// Only the Electron desktop build talks to a real Chrome store; the browser popup can't (and
+// shouldn't) reach the filesystem, so the direct-import button is desktop-only. See main.ts.
+const IS_DESKTOP =
+  typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent);
+
+interface ChromeImportResponse {
+  ok: boolean;
+  error?: string;
+  credentials?: { url: string; username: string; password: string }[];
+  undecryptable?: number;
+  profiles?: number;
+}
+interface DesktopImportApi {
+  chromeImport: () => Promise<ChromeImportResponse>;
+}
+function getChromeImporter(): DesktopImportApi | null {
+  const api = (globalThis as { electronAPI?: Partial<DesktopImportApi> }).electronAPI;
+  return api?.chromeImport ? (api as DesktopImportApi) : null;
+}
 
 /**
  * Import screen: paste or upload a password export - a browser CSV (Chrome/Edge/Firefox/Safari,
@@ -103,6 +124,29 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     await toPreview(entries, skipped);
   }
 
+  /** Desktop-only: pull credentials straight from Chrome's encrypted store (no CSV export step). */
+  async function importFromChrome() {
+    setError(null);
+    const importer = getChromeImporter();
+    if (!importer) return;
+    setBusy(true);
+    try {
+      const res = await importer.chromeImport();
+      if (!res.ok) {
+        setError(res.error ?? "Couldn't read Chrome's passwords.");
+        return;
+      }
+      const { entries, skipped } = entriesFromCredentials(res.credentials ?? []);
+      // Fold anything Chrome-encrypted-but-undecryptable (e.g. newer app-bound "v20" items) into
+      // the skipped count so the preview reports them honestly rather than silently dropping them.
+      await toPreview(entries, skipped + (res.undecryptable ?? 0));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Chrome import failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runImport() {
     if (stage.name !== 'preview') return;
     const toImport = stage.entries.filter((e) => !stage.dupeKeys.has(e.key));
@@ -147,6 +191,27 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
                 onChange={onFile}
               />
             </label>
+            {IS_DESKTOP && getChromeImporter() && (
+              <div className="mb-3">
+                <div className="relative mb-3 flex items-center">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span className="px-2 text-[10px] uppercase tracking-wider text-white/30">or</span>
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+                <Button
+                  variant="subtle"
+                  className="w-full"
+                  onClick={importFromChrome}
+                  disabled={busy}
+                >
+                  <Chrome size={15} /> {busy ? 'Reading Chrome…' : 'Import directly from Google Chrome'}
+                </Button>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-white/40">
+                  Reads your saved Chrome passwords directly - no export needed. Close Google Chrome
+                  first so its password file can be read.
+                </p>
+              </div>
+            )}
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}

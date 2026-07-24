@@ -546,58 +546,62 @@ function GridCard({
         </div>
       )}
 
-      {count > 1 && (
-        <div className="mt-3 flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIdx((cur - 1 + count) % count)}
-            className="rounded-md p-0.5 text-violet-soft transition hover:bg-white/10"
-            title="Previous account"
-          >
-            <ChevronLeft size={14} />
-          </button>
-          {count <= 6 ? (
-            <div className="flex items-center gap-1.5">
-              {group.items.map((it, i) => (
-                <button
-                  key={it.id}
-                  type="button"
-                  onClick={() => setIdx(i)}
-                  title={it.username || it.name}
-                  className={`h-1.5 w-1.5 rounded-full transition ${
-                    i === cur ? 'bg-white/80' : 'bg-white/25 hover:bg-white/50'
-                  }`}
-                />
-              ))}
-            </div>
-          ) : (
-            <span className="text-[10px] tabular-nums text-white/40">
-              {cur + 1} / {count}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setIdx((cur + 1) % count)}
-            className="rounded-md p-0.5 text-violet-soft transition hover:bg-white/10"
-            title="Next account"
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      {/* mt-auto pins the footer to the card's bottom edge - when the row stretches this card
+          taller than its content, the slack opens up here inside the card. */}
+      <div className="mt-auto">
+        {count > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setIdx((cur - 1 + count) % count)}
+              className="rounded-md p-0.5 text-violet-soft transition hover:bg-white/10"
+              title="Previous account"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            {count <= 6 ? (
+              <div className="flex items-center gap-1.5">
+                {group.items.map((it, i) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => setIdx(i)}
+                    title={it.username || it.name}
+                    className={`h-1.5 w-1.5 rounded-full transition ${
+                      i === cur ? 'bg-white/80' : 'bg-white/25 hover:bg-white/50'
+                    }`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <span className="text-[10px] tabular-nums text-white/40">
+                {cur + 1} / {count}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIdx((cur + 1) % count)}
+              className="rounded-md p-0.5 text-violet-soft transition hover:bg-white/10"
+              title="Next account"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
 
-      {site && (
-        <a
-          href={siteHref(site)}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
-        >
-          <ExternalLink size={13} />
-          Open site
-        </a>
-      )}
+        {site && (
+          <a
+            href={siteHref(site)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
+          >
+            <ExternalLink size={13} />
+            Open site
+          </a>
+        )}
+      </div>
     </div>
   );
 }
@@ -891,7 +895,9 @@ export function VaultList({
             {byCategory.length === 0 ? 'No items yet.' : 'No matches.'}
           </p>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] items-start gap-3 p-1">
+          // No items-start on the grid: cards stretch to their row's height so every card in a
+          // row is equally tall; the slack opens inside the card (above the footer), not below it.
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3 p-1">
             {groups.map((group) => (
               <GridCard
                 key={group.key}

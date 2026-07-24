@@ -17,6 +17,8 @@ export interface AppShellProps {
   syncing: boolean;
   onHealth: () => void;
   onSettings: () => void;
+  /** Compromised passwords were found (opt-in breach check) - shells show a red dot on Health. */
+  healthAlert?: boolean;
   children: ReactNode;
 }
 
@@ -30,6 +32,7 @@ export function AppShell({
   syncing,
   onHealth,
   onSettings,
+  healthAlert,
   children,
 }: AppShellProps) {
   return (
@@ -43,6 +46,7 @@ export function AppShell({
           syncing={syncing}
           onHealth={onHealth}
           onSettings={onSettings}
+          healthAlert={healthAlert}
         />
         <div className="min-h-0 flex-1">{children}</div>
       </div>

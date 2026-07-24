@@ -6,7 +6,15 @@
  */
 
 import type { AutofillMatch, AutofillIdentityMatch, AutofillCardMatch, Msg, MsgResult } from '../lib/messages.js';
+import { computeAutofillPolicy, type AutofillPolicy } from '../lib/settings.js';
 import { generatePassword, passwordStrength, type LoginFields } from '@pm/shared';
+
+/**
+ * What this page is allowed to do per user settings (per-type auto-save/autofill toggles and the
+ * ignored-websites list). Defaults to fully enabled until the real settings arrive at attach();
+ * the background/session layer enforces the same rules, so a race can't leak matches anyway.
+ */
+let policy: AutofillPolicy = { logins: true, identities: true, cards: true };
 
 const PW_SELECTOR = 'input[type="password"]';
 const USER_HINTS = /user|login|email|account|benutzer|namen?/i;
@@ -16,7 +24,7 @@ function isVisible(el: HTMLElement): boolean {
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 }
 
-/**
+/** Query matching inputs in the document, descending into any open shadow roots. */
 function queryInputsRecursive(
   scope: ParentNode = document,
   selector: string = 'input:not([type="hidden"])',
@@ -533,23 +541,25 @@ function refreshBadges(recompute = false): void {
  */
 function scanFields(): void {
   const present = new Set<HTMLInputElement>();
-  for (const el of document.querySelectorAll<HTMLInputElement>(PW_SELECTOR)) {
-    if (!isVisible(el)) continue;
-    present.add(el);
-    ensureBadge(el);
-    void attemptAutoFill(el);
-    const userField = findUsernameField(el);
-    if (userField && isVisible(userField)) {
-      present.add(userField);
-      ensureBadge(userField, el);
+  if (policy.logins) {
+    for (const el of document.querySelectorAll<HTMLInputElement>(PW_SELECTOR)) {
+      if (!isVisible(el)) continue;
+      present.add(el);
+      ensureBadge(el);
+      void attemptAutoFill(el);
+      const userField = findUsernameField(el);
+      if (userField && isVisible(userField)) {
+        present.add(userField);
+        ensureBadge(userField, el);
+      }
     }
   }
   for (const field of [...badges.keys()]) {
     if (!present.has(field)) removeBadge(field);
   }
   refreshBadges(true); // DOM changed → re-measure insets (a site control may have appeared/moved)
-  const claimed = scanCardFields();
-  scanIdentityFields(claimed);
+  const claimed = policy.cards ? scanCardFields() : new Set<HTMLInputElement>();
+  if (policy.identities) scanIdentityFields(claimed);
 }
 
 // --- identity autofill (name/address/phone-style checkout & registration fields) -----------------
@@ -1320,6 +1330,7 @@ function findFilledPassword(scope: ParentNode): HTMLInputElement | null {
 }
 
 async function maybePromptSave(identifier: string, password: string): Promise<void> {
+  if (!policy.logins) return; // auto-save disabled (per-type toggle or ignored site)
   const sig = `${identifier} ${password}`;
   if (!password || sig === lastSaved) return;
   const matches = await query();
@@ -1410,7 +1421,23 @@ function esc(s: string): string {
 
 // --- wiring --------------------------------------------------------------------------------------
 
-function attach(): void {
+async function attach(): Promise<void> {
+  // Load the user's autofill policy (per-type toggles + ignored websites) before the first sweep,
+  // and keep it live: settings edits in the popup apply to already-open tabs on the next re-scan.
+  const settingsRes = await sendMsg({ kind: 'get_settings' });
+  if (settingsRes?.ok && settingsRes.kind === 'settings') {
+    policy = computeAutofillPolicy(settingsRes.settings, location.href);
+  }
+  try {
+    chrome.storage?.onChanged?.addListener((changes, area) => {
+      const next = changes['pm.settings']?.newValue;
+      if (area === 'local' && next) {
+        policy = computeAutofillPolicy(next, location.href);
+        scanFields();
+      }
+    });
+  } catch {} // storage API unavailable (shouldn't happen in the extension)
+
   // Persistent badges: sweep now, then keep in sync with DOM changes so every detected password
   // field always carries the key icon (not just the focused one).
   scanFields();
@@ -1442,7 +1469,7 @@ function attach(): void {
     async (e) => {
       const t = e.target as HTMLElement | null;
       if (!(t instanceof HTMLInputElement) || !isVisible(t)) return;
-      if (t.matches(PW_SELECTOR)) ensureBadge(t); // in case this field only became detectable at focus time
+      if (policy.logins && t.matches(PW_SELECTOR)) ensureBadge(t); // in case this field only became detectable at focus time
       const badge = badges.get(t);
       if (!badge) return; // not a field we've badged (password field or its username companion)
       const pw = badge.pwField;
@@ -1584,7 +1611,7 @@ function attach(): void {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', attach);
+  document.addEventListener('DOMContentLoaded', () => void attach());
 } else {
-  attach();
+  void attach();
 }

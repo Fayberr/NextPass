@@ -49,12 +49,15 @@ function NavButton({
   label,
   icon: Icon,
   count,
+  alert,
   onClick,
 }: {
   active: boolean;
   label: string;
   icon: IconComponent;
   count?: number;
+  /** Red attention dot (e.g. compromised passwords found by the breach check). */
+  alert?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -72,6 +75,7 @@ function NavButton({
           <Icon size={16} />
         </span>
         <span className="truncate">{label}</span>
+        {alert && <span className="ml-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />}
       </span>
       {typeof count === 'number' && count > 0 && (
         <span
@@ -93,6 +97,7 @@ export function DesktopSidebar({
   onHealth,
   onSettings,
   counts,
+  healthAlert,
 }: {
   active: Category | 'generator' | 'health' | 'settings';
   onSelect: (c: Category) => void;
@@ -100,6 +105,7 @@ export function DesktopSidebar({
   onHealth: () => void;
   onSettings: () => void;
   counts?: Partial<Record<Category, number>>;
+  healthAlert?: boolean;
 }) {
   return (
     <nav className="flex w-60 shrink-0 select-none flex-col border-r border-white/[0.07] bg-white/[0.035] p-3">
@@ -129,7 +135,7 @@ export function DesktopSidebar({
       {/* Security tools pinned to the very bottom */}
       <div className="mb-2 h-px w-full bg-white/10" />
       <div className="space-y-0.5">
-        <NavButton active={active === 'health'} label="Password Health" icon={ShieldCheck} onClick={onHealth} />
+        <NavButton active={active === 'health'} label="Password Health" icon={ShieldCheck} alert={healthAlert} onClick={onHealth} />
         <NavButton active={active === 'settings'} label="Settings" icon={SettingsIcon} onClick={onSettings} />
       </div>
     </nav>

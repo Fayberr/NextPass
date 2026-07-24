@@ -104,7 +104,8 @@ export type Msg =
   | { kind: 'google_signin' }
   | { kind: 'open_unlock_ui' }
   | { kind: 'list_devices' }
-  | { kind: 'revoke_device'; id: string };
+  | { kind: 'revoke_device'; id: string }
+  | { kind: 'breach_check' };
 
 export type MsgResult =
   | { ok: true; kind: 'google_auth_result'; res: import('@pm/shared').GoogleAuthResponse }
@@ -128,8 +129,17 @@ export type MsgResult =
   | { ok: true; kind: 'passkey_created'; res: PasskeyCreateRes }
   | { ok: true; kind: 'passkey_asserted'; res: PasskeyGetRes }
   | { ok: true; kind: 'devices'; devices: DeviceInfo[] }
+  | { ok: true; kind: 'breach'; report: BreachReport }
   | { ok: true; kind: 'void' }
   | { ok: false; error: string };
+
+/** Result of the opt-in HIBP k-anonymity compromised-password check (see session.breachAudit). */
+export interface BreachReport {
+  /** How many login items with a password were checked. */
+  checked: number;
+  /** Items whose password appears in known breaches, with the breach occurrence count. */
+  breached: { id: string; name: string; count: number }[];
+}
 
 /**
  * WebAuthn shim payloads. All binary values are base64url strings because these cross the

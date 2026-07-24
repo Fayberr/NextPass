@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, shell, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut, powerMonitor, shell, safeStorage } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import initSqlJs from 'sql.js';
 
@@ -31,12 +31,15 @@ interface DesktopSettings {
   launchOnStartup: boolean;
   startMinimized: boolean;
   quickSearchHotkey: string;
+  /** Which browser "Open site" links launch in: 'system' = OS default, else a BROWSERS id. */
+  defaultBrowser: string;
 }
 
 const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   launchOnStartup: false,
   startMinimized: false,
   quickSearchHotkey: DEFAULT_HOTKEY,
+  defaultBrowser: 'system',
 };
 
 let desktopSettings: DesktopSettings = { ...DEFAULT_DESKTOP_SETTINGS };
@@ -73,9 +76,13 @@ function registerHotkey(accel: string): string | null {
   try {
     const ok = globalShortcut.register(accel, () => {
       if (mainWindow) {
+        // Tell the overlay whether we stole the user away from another app, so it can
+        // re-minimize after a copy and hand focus straight back (quick-search flow).
+        const wasMinimized = mainWindow.isMinimized() || !mainWindow.isFocused();
         if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
         mainWindow.focus();
-        mainWindow.webContents.send('toggle-quick-search');
+        mainWindow.webContents.send('toggle-quick-search', { wasMinimized });
       }
     });
     return ok ? null : `Could not register "${accel}" - it may already be in use by another app.`;
@@ -97,6 +104,126 @@ function applyLoginItem(): void {
     path: process.execPath,
     args,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Chromium-family browser registry (Windows). One table drives three features:
+//  - Settings "Default browser" picker: which browser "Open site" links launch in
+//  - Settings "Supported browsers" status list (installed / not installed)
+//  - Direct password-store import from any installed Chromium-family browser
+// ---------------------------------------------------------------------------
+
+const LOCALAPPDATA = () => process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+const APPDATA = () => process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+const PROGRAM_FILES = () => process.env['ProgramFiles'] || 'C:\\Program Files';
+const PROGRAM_FILES_X86 = () => process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
+interface BrowserDef {
+  id: string;
+  name: string;
+  /** Process image name for the "is it running" check before touching Login Data. */
+  processName: string;
+  /** Candidate absolute paths to the browser executable (first existing one wins). */
+  exeCandidates: () => string[];
+  /** The Chromium "User Data" dir (holds Local State + profile dirs). */
+  userData: () => string;
+  /** Opera variants keep Login Data / Local State at the user-data root, not in profile subdirs. */
+  flatProfile?: boolean;
+}
+
+const BROWSERS: BrowserDef[] = [
+  {
+    id: 'chrome',
+    name: 'Google Chrome',
+    processName: 'chrome.exe',
+    exeCandidates: () => [
+      path.join(PROGRAM_FILES(), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(PROGRAM_FILES_X86(), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(LOCALAPPDATA(), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ],
+    userData: () => path.join(LOCALAPPDATA(), 'Google', 'Chrome', 'User Data'),
+  },
+  {
+    id: 'edge',
+    name: 'Microsoft Edge',
+    processName: 'msedge.exe',
+    exeCandidates: () => [
+      path.join(PROGRAM_FILES_X86(), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(PROGRAM_FILES(), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ],
+    userData: () => path.join(LOCALAPPDATA(), 'Microsoft', 'Edge', 'User Data'),
+  },
+  {
+    id: 'brave',
+    name: 'Brave',
+    processName: 'brave.exe',
+    exeCandidates: () => [
+      path.join(PROGRAM_FILES(), 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+      path.join(PROGRAM_FILES_X86(), 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+      path.join(LOCALAPPDATA(), 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    ],
+    userData: () => path.join(LOCALAPPDATA(), 'BraveSoftware', 'Brave-Browser', 'User Data'),
+  },
+  {
+    id: 'opera',
+    name: 'Opera',
+    processName: 'opera.exe',
+    exeCandidates: () => [
+      path.join(LOCALAPPDATA(), 'Programs', 'Opera', 'opera.exe'),
+      path.join(LOCALAPPDATA(), 'Programs', 'Opera', 'launcher.exe'),
+      path.join(PROGRAM_FILES(), 'Opera', 'opera.exe'),
+    ],
+    userData: () => path.join(APPDATA(), 'Opera Software', 'Opera Stable'),
+    flatProfile: true,
+  },
+  {
+    id: 'operagx',
+    name: 'Opera GX',
+    processName: 'opera.exe',
+    exeCandidates: () => [
+      path.join(LOCALAPPDATA(), 'Programs', 'Opera GX', 'opera.exe'),
+      path.join(LOCALAPPDATA(), 'Programs', 'Opera GX', 'launcher.exe'),
+    ],
+    userData: () => path.join(APPDATA(), 'Opera Software', 'Opera GX Stable'),
+    flatProfile: true,
+  },
+  {
+    id: 'chromium',
+    name: 'Chromium',
+    processName: 'chrome.exe',
+    exeCandidates: () => [path.join(LOCALAPPDATA(), 'Chromium', 'Application', 'chrome.exe')],
+    userData: () => path.join(LOCALAPPDATA(), 'Chromium', 'User Data'),
+  },
+];
+
+function findBrowserExe(def: BrowserDef): string | null {
+  if (process.platform !== 'win32') return null;
+  for (const p of def.exeCandidates()) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Open a http(s) URL respecting the user's default-browser choice. Falls back to the OS
+ * default (shell.openExternal) when set to 'system', the chosen browser is gone, or launch fails.
+ */
+function openExternalUrl(url: string): void {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return;
+  const def = BROWSERS.find((b) => b.id === desktopSettings.defaultBrowser);
+  const exe = def ? findBrowserExe(def) : null;
+  if (exe) {
+    try {
+      const child = spawn(exe, [url], { detached: true, stdio: 'ignore' });
+      child.unref();
+      return;
+    } catch (err) {
+      console.error(`Failed to launch ${def!.name}, falling back to system browser:`, err);
+    }
+  }
+  void shell.openExternal(url);
 }
 
 function createWindow() {
@@ -121,9 +248,7 @@ function createWindow() {
   // never a child Electron window. Covers target="_blank" anchors (e.g. the vault
   // cards' "Open site") and window.open alike.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      void shell.openExternal(url);
-    }
+    openExternalUrl(url);
     return { action: 'deny' };
   });
 
@@ -133,9 +258,7 @@ function createWindow() {
     const internal = VITE_DEV_SERVER_URL ? url.startsWith(VITE_DEV_SERVER_URL) : url.startsWith('file://');
     if (!internal) {
       e.preventDefault();
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        void shell.openExternal(url);
-      }
+      openExternalUrl(url);
     }
   });
 
@@ -188,6 +311,12 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Auto-lock on OS lock/suspend (Kaspersky-style). The renderer decides whether to act on it
+  // (Settings -> "Lock when the computer locks"), since the vault key lives there on desktop.
+  const notifySystemLock = () => mainWindow?.webContents.send('system-lock');
+  powerMonitor.on('lock-screen', notifySystemLock);
+  powerMonitor.on('suspend', notifySystemLock);
 });
 
 app.on('will-quit', () => {
@@ -242,9 +371,7 @@ ipcMain.handle('desktop-settings-set', (_e, patch: Partial<DesktopSettings>) => 
 });
 
 ipcMain.on('open-external', (_, url: string) => {
-  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-    shell.openExternal(url);
-  }
+  if (typeof url === 'string') openExternalUrl(url);
 });
 
 // Google OAuth via system default browser + local loopback callback.
@@ -299,7 +426,7 @@ ipcMain.handle('google-oauth', async () => {
     });
 
     server.listen(28999, '127.0.0.1', () => {
-      shell.openExternal(authUrl);
+      openExternalUrl(authUrl);
     });
 
     // Give up after 5 minutes so the promise never hangs forever.
@@ -344,12 +471,12 @@ interface ChromeImportResult {
   profiles?: number;
 }
 
-/** Chrome must be closed - it holds a lock on Login Data, and copying a live DB risks a torn read. */
-function isChromeRunning(): Promise<boolean> {
+/** The browser must be closed - it holds a lock on Login Data, and copying a live DB risks a torn read. */
+function isProcessRunning(imageName: string): Promise<boolean> {
   return new Promise((resolve) => {
-    execFile('tasklist', ['/FI', 'IMAGENAME eq chrome.exe', '/NH'], (err, stdout) => {
+    execFile('tasklist', ['/FI', `IMAGENAME eq ${imageName}`, '/NH'], (err, stdout) => {
       if (err) return resolve(false);
-      resolve(/chrome\.exe/i.test(stdout));
+      resolve(stdout.toLowerCase().includes(imageName.toLowerCase()));
     });
   });
 }
@@ -397,19 +524,18 @@ function decryptChromePassword(blob: Buffer, key: Buffer): string | null {
   }
 }
 
-ipcMain.handle('chrome-import', async (): Promise<ChromeImportResult> => {
+async function importFromBrowser(def: BrowserDef): Promise<ChromeImportResult> {
   try {
     if (process.platform !== 'win32') {
       return { ok: false, error: 'Direct browser import is only available on Windows.' };
     }
-    if (await isChromeRunning()) {
-      return { ok: false, error: 'Please fully close Google Chrome, then try again.' };
+    if (await isProcessRunning(def.processName)) {
+      return { ok: false, error: `Please fully close ${def.name}, then try again.` };
     }
 
-    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    const userDataDir = path.join(localAppData, 'Google', 'Chrome', 'User Data');
+    const userDataDir = def.userData();
     if (!fs.existsSync(userDataDir)) {
-      return { ok: false, error: 'No Google Chrome installation was found for this user.' };
+      return { ok: false, error: `No ${def.name} installation was found for this user.` };
     }
 
     // Unwrap the AES key from Local State.
@@ -418,23 +544,26 @@ ipcMain.handle('chrome-import', async (): Promise<ChromeImportResult> => {
     try {
       const localState = JSON.parse(fs.readFileSync(localStatePath, 'utf-8'));
       const encKeyB64: string | undefined = localState?.os_crypt?.encrypted_key;
-      if (!encKeyB64) return { ok: false, error: "Couldn't read Chrome's encryption key." };
+      if (!encKeyB64) return { ok: false, error: `Couldn't read ${def.name}'s encryption key.` };
       const encKey = Buffer.from(encKeyB64, 'base64');
       // Strip the 5-byte "DPAPI" prefix before unwrapping.
       const dpapiBlob = encKey.subarray(5);
       key = await dpapiUnprotect(dpapiBlob.toString('base64'));
     } catch {
-      return { ok: false, error: "Couldn't decrypt Chrome's encryption key (Windows DPAPI)." };
+      return { ok: false, error: `Couldn't decrypt ${def.name}'s encryption key (Windows DPAPI).` };
     }
 
     // sql.js loads its wasm from beside the bundled main.js (see vite.config copySqlWasm).
     const SQL = await initSqlJs({ locateFile: () => path.join(__dirname, 'sql-wasm.wasm') });
 
-    // Enumerate profiles: "Default" plus any "Profile N".
-    const profiles = fs
-      .readdirSync(userDataDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && (d.name === 'Default' || /^Profile \d+$/.test(d.name)))
-      .map((d) => d.name);
+    // Enumerate profiles: "Default" plus any "Profile N" - except Opera-family, whose user-data
+    // dir IS the (single) profile, with Login Data sitting right next to Local State.
+    const profiles = def.flatProfile
+      ? ['.']
+      : fs
+          .readdirSync(userDataDir, { withFileTypes: true })
+          .filter((d) => d.isDirectory() && (d.name === 'Default' || /^Profile \d+$/.test(d.name)))
+          .map((d) => d.name);
 
     const credentials: BrowserCredential[] = [];
     let undecryptable = 0;
@@ -443,7 +572,7 @@ ipcMain.handle('chrome-import', async (): Promise<ChromeImportResult> => {
     for (const profile of profiles) {
       const loginDataPath = path.join(userDataDir, profile, 'Login Data');
       if (!fs.existsSync(loginDataPath)) continue;
-      // Copy to temp so we never touch (or lock) Chrome's live file.
+      // Copy to temp so we never touch (or lock) the browser's live file.
       const tmpCopy = path.join(os.tmpdir(), `nextpass-logindata-${Date.now()}-${profile.replace(/\W/g, '')}`);
       try {
         fs.copyFileSync(loginDataPath, tmpCopy);
@@ -480,9 +609,39 @@ ipcMain.handle('chrome-import', async (): Promise<ChromeImportResult> => {
 
     return { ok: true, credentials, undecryptable, profiles: profilesWithData };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Chrome import failed.' };
+    return { ok: false, error: err instanceof Error ? err.message : `${def.name} import failed.` };
   }
+}
+
+/** Kept for compatibility with older renderers: plain Chrome import. */
+ipcMain.handle('chrome-import', () => importFromBrowser(BROWSERS[0]!));
+
+ipcMain.handle('browser-import', (_e, id: string): Promise<ChromeImportResult> => {
+  const def = BROWSERS.find((b) => b.id === id);
+  if (!def) return Promise.resolve({ ok: false, error: 'Unknown browser.' });
+  return importFromBrowser(def);
 });
+
+/** Installed-browser detection for the Settings status list + import/default-browser pickers. */
+ipcMain.handle('browsers-detect', () =>
+  BROWSERS.map((b) => {
+    const exe = findBrowserExe(b);
+    let hasUserData = false;
+    try {
+      hasUserData = process.platform === 'win32' && fs.existsSync(b.userData());
+    } catch {}
+    return {
+      id: b.id,
+      name: b.name,
+      /** Browser is present on this machine (exe found, or at least a profile dir). */
+      installed: !!exe || hasUserData,
+      /** We can launch it as the default "Open site" browser (needs the exe). */
+      launchable: !!exe,
+      /** A password store exists to import from. */
+      importable: hasUserData,
+    };
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Windows Hello quick unlock.

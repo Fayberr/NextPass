@@ -158,6 +158,9 @@ export async function handleMessage(msg: Msg, session: SessionManager = defaultS
       case 'audit':
         return { ok: true, kind: 'audit', report: await session.audit() };
 
+      case 'breach_check':
+        return { ok: true, kind: 'breach', report: await session.breachAudit() };
+
       case 'change_master_password':
         await session.changeMasterPassword(msg.currentPassword, msg.newPassword);
         return { ok: true, kind: 'void' };

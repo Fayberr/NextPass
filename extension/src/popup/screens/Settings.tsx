@@ -16,7 +16,7 @@ import {
   Moon,
 } from '../icons.js';
 import { send } from '../client.js';
-import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
+import { DEFAULT_SETTINGS, normalizeIgnoredSite, type Settings as SettingsType } from '../../lib/settings.js';
 import { applyTheme } from '../../lib/theme.js';
 import { getHelloApi, type HelloStatus } from '../../lib/hello-unlock.js';
 import type { DeviceInfo } from '@pm/shared';
@@ -56,6 +56,17 @@ interface DesktopSettingsShape {
   launchOnStartup: boolean;
   startMinimized: boolean;
   quickSearchHotkey: string;
+  /** 'system' = OS default browser, else a browser id from browsersDetect(). */
+  defaultBrowser: string;
+}
+
+/** One entry from the main process's Chromium-family browser registry (browsers-detect IPC). */
+interface BrowserInfo {
+  id: string;
+  name: string;
+  installed: boolean;
+  launchable: boolean;
+  importable: boolean;
 }
 
 interface DesktopApi {
@@ -63,6 +74,7 @@ interface DesktopApi {
   desktopSettingsSet: (
     patch: Partial<DesktopSettingsShape>,
   ) => Promise<{ settings: DesktopSettingsShape; error: string | null }>;
+  browsersDetect?: () => Promise<BrowserInfo[]>;
 }
 
 function getDesktopApi(): DesktopApi | null {
@@ -252,6 +264,149 @@ function DesktopSection({ api }: { api: DesktopApi }) {
   );
 }
 
+/** Desktop-only "Browsers" pane: default-browser picker + supported-browsers status list. */
+function BrowsersSection({ api }: { api: DesktopApi }) {
+  const [ds, setDs] = useState<DesktopSettingsShape | null>(null);
+  const [browsers, setBrowsers] = useState<BrowserInfo[] | null>(null);
+
+  useEffect(() => {
+    void api.desktopSettingsGet().then(setDs).catch(() => setDs(null));
+    if (api.browsersDetect) {
+      void api.browsersDetect().then(setBrowsers).catch(() => setBrowsers(null));
+    }
+  }, []);
+
+  if (!ds) return null;
+  const launchable = (browsers ?? []).filter((b) => b.launchable);
+
+  return (
+    <>
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Default Browser</h2>
+        <Card className="p-3">
+          <Field label="Open websites with">
+            <Select
+              value={ds.defaultBrowser ?? 'system'}
+              options={[
+                { value: 'system', label: 'System default' },
+                ...launchable.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+              onChange={(v) =>
+                void api.desktopSettingsSet({ defaultBrowser: v }).then((r) => setDs(r.settings))
+              }
+            />
+          </Field>
+          <p className="text-[11px] text-white/40">
+            "Open site" links on vault cards (and any other external link) launch in this browser.
+          </p>
+        </Card>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Supported Browsers</h2>
+        <Card className="p-3 space-y-2">
+          {browsers === null ? (
+            <p className="text-[11px] text-white/40">Detecting installed browsers…</p>
+          ) : (
+            browsers.map((b) => (
+              <div
+                key={b.id}
+                className="flex items-center justify-between gap-3 rounded-lg bg-white/5 px-3 py-2"
+              >
+                <span className="text-xs font-medium text-white/90">{b.name}</span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${
+                    b.installed
+                      ? 'bg-emerald-500/15 text-emerald-400'
+                      : 'bg-white/10 text-white/40'
+                  }`}
+                >
+                  {b.installed ? 'Installed' : 'Not found'}
+                </span>
+              </div>
+            ))
+          )}
+          <p className="pt-1 text-[11px] text-white/40">
+            The NextPass browser extension runs in every Chromium-based browser listed here - load
+            it from the browser's extensions page. Passwords can be imported directly from any
+            installed browser under Settings → Backup & Restore → Import Passwords.
+          </p>
+        </Card>
+      </section>
+    </>
+  );
+}
+
+/** Editable host list (ignored websites): add via input (normalized to a bare host), remove inline. */
+function IgnoredList({
+  title,
+  hint,
+  list,
+  onChange,
+}: {
+  title: string;
+  hint: string;
+  list: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [input, setInput] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  function add() {
+    const host = normalizeIgnoredSite(input);
+    if (!host) {
+      setErr('Enter a valid website, e.g. example.com');
+      return;
+    }
+    setErr(null);
+    setInput('');
+    if (!list.includes(host)) onChange([...list, host]);
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-white/90">{title}</p>
+      <p className="mt-0.5 text-[11px] text-white/40">{hint}</p>
+      <div className="mt-2 flex gap-2">
+        <Input
+          placeholder="example.com"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button variant="ghost" onClick={add} className="shrink-0">
+          Add
+        </Button>
+      </div>
+      {err && <p className="mt-1 text-xs text-rose-400">{err}</p>}
+      {list.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {list.map((d) => (
+            <div
+              key={d}
+              className="flex items-center justify-between gap-3 rounded-lg bg-white/5 px-2.5 py-1.5"
+            >
+              <span className="truncate font-mono text-xs text-white/80">{d}</span>
+              <button
+                type="button"
+                onClick={() => onChange(list.filter((x) => x !== d))}
+                className="shrink-0 text-xs text-white/40 transition hover:text-rose-400"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const LOCK_OPTIONS = [
   { value: 0, label: 'Never' },
   { value: 1, label: '1 minute' },
@@ -272,10 +427,12 @@ const CLIP_OPTIONS = [
  *  left, one section's content on the right); the 360px popup keeps its single scroll column. */
 const IS_DESKTOP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent);
 
-type PaneId = 'general' | 'account' | 'devices' | 'password' | 'backup' | 'danger';
+type PaneId = 'general' | 'autofill' | 'browsers' | 'account' | 'devices' | 'password' | 'backup' | 'danger';
 
-const PANES: { id: PaneId; label: string; danger?: boolean }[] = [
+const PANES: { id: PaneId; label: string; danger?: boolean; desktopOnly?: boolean }[] = [
   { id: 'general', label: 'General' },
+  { id: 'autofill', label: 'Autofill & Websites' },
+  { id: 'browsers', label: 'Browsers', desktopOnly: true },
   { id: 'account', label: 'Google Account' },
   { id: 'devices', label: 'Connected Devices' },
   { id: 'password', label: 'Master Password' },
@@ -643,7 +800,7 @@ export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: 
       <div className="flex min-h-0 flex-1">
         {IS_DESKTOP && (
           <nav className="w-48 shrink-0 space-y-0.5 overflow-y-auto border-r border-white/5 p-3">
-            {PANES.map((p) => (
+            {PANES.filter((p) => !p.desktopOnly || desktopApi).map((p) => (
               <button
                 key={p.id}
                 type="button"
@@ -686,9 +843,113 @@ export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: 
                 onChange={(v) => update({ clipboardClearSeconds: v })}
               />
             </Field>
+
+            {IS_DESKTOP && (
+              <label className="flex items-start justify-between gap-3 cursor-pointer border-t border-white/5 pt-3">
+                <div>
+                  <p className="text-xs font-medium text-white/90">Lock when the computer locks</p>
+                  <p className="text-[11px] text-white/40 mt-0.5">
+                    Also lock the vault whenever Windows locks or the PC goes to sleep.
+                  </p>
+                </div>
+                <Checkbox
+                  checked={s.lockOnSystemLock}
+                  onChange={(v) => void update({ lockOnSystemLock: v })}
+                  className="shrink-0 mt-0.5"
+                />
+              </label>
+            )}
+
+            <label className="flex items-start justify-between gap-3 cursor-pointer border-t border-white/5 pt-3">
+              <div>
+                <p className="text-xs font-medium text-white/90">Check for compromised passwords</p>
+                <p className="text-[11px] text-white/40 mt-0.5">
+                  Compare your passwords against known data breaches (haveibeenpwned.com). Private
+                  by design: only the first 5 characters of an anonymous hash ever leave this
+                  device - never a password. Results appear under Password Health.
+                </p>
+              </div>
+              <Checkbox
+                checked={s.breachCheck}
+                onChange={(v) => void update({ breachCheck: v })}
+                className="shrink-0 mt-0.5"
+              />
+            </label>
           </Card>
         </section>
         )}
+
+        {/* Autofill & Websites */}
+        {show('autofill') && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">
+            Auto-Save and Autofill
+          </h2>
+          <Card className="p-3 space-y-3">
+            {(
+              [
+                {
+                  key: 'logins' as const,
+                  label: 'Logins',
+                  hint: 'Detect password fields, offer saved logins, and prompt to save new ones.',
+                },
+                {
+                  key: 'identities' as const,
+                  label: 'Identities',
+                  hint: 'Fill name, address and contact fields on checkout and registration forms.',
+                },
+                {
+                  key: 'cards' as const,
+                  label: 'Bank cards',
+                  hint: 'Fill card number, holder and expiry fields on payment forms.',
+                },
+              ]
+            ).map(({ key, label, hint }, i) => (
+              <label
+                key={key}
+                className={`flex items-start justify-between gap-3 cursor-pointer ${i > 0 ? 'border-t border-white/5 pt-3' : ''}`}
+              >
+                <div>
+                  <p className="text-xs font-medium text-white/90">{label}</p>
+                  <p className="text-[11px] text-white/40 mt-0.5">{hint}</p>
+                </div>
+                <Checkbox
+                  checked={s.autofill[key]}
+                  onChange={(v) => void update({ autofill: { ...s.autofill, [key]: v } })}
+                  className="shrink-0 mt-0.5"
+                />
+              </label>
+            ))}
+          </Card>
+        </section>
+        )}
+
+        {show('autofill') && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">
+            Ignored Websites
+          </h2>
+          <Card className="p-3 space-y-4">
+            <IgnoredList
+              title="Don't save or autofill on these websites"
+              hint="NextPass stays completely out of the way here: no save prompts, no autofill badges, no suggestions (includes all subdomains)."
+              list={s.ignoredSites}
+              onChange={(next) => void update({ ignoredSites: next })}
+            />
+            <div className="border-t border-white/5 pt-4">
+              <IgnoredList
+                title="Don't handle passkeys on these websites"
+                hint="Passkey sign-in requests on these sites are not intercepted or served by NextPass."
+                list={s.ignoredPasskeySites}
+                onChange={(next) => void update({ ignoredPasskeySites: next })}
+              />
+            </div>
+          </Card>
+        </section>
+        )}
+
+        {/* Desktop-only: default browser + supported-browsers status */}
+        {show('browsers') && desktopApi && <BrowsersSection api={desktopApi} />}
 
         {/* Appearance */}
         {show('general') && (

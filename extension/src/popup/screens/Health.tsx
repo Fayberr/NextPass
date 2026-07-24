@@ -3,6 +3,7 @@ import { Button } from '../ui.js';
 import { ArrowLeft, ShieldCheck } from '../icons.js';
 import { send } from '../client.js';
 import type { AuditReport, Weakness } from '@pm/shared';
+import type { BreachReport } from '../../lib/messages.js';
 
 const ISSUE_LABEL: Record<Weakness, string> = {
   weak: 'Weak',
@@ -19,11 +20,22 @@ function scoreColor(score: number): string {
 
 export function Health({ onBack, onSelect }: { onBack: () => void; onSelect: (id: string) => void }) {
   const [report, setReport] = useState<AuditReport | null>(null);
+  const [breachEnabled, setBreachEnabled] = useState<boolean | null>(null);
+  const [breach, setBreach] = useState<BreachReport | null>(null);
 
   useEffect(() => {
     void (async () => {
       const res = await send({ kind: 'audit' });
       if (res.ok && res.kind === 'audit') setReport(res.report);
+    })();
+    // Opt-in breach check (HIBP k-anonymity) - only runs when enabled in Settings.
+    void (async () => {
+      const s = await send({ kind: 'get_settings' });
+      const enabled = s.ok && s.kind === 'settings' && s.settings.breachCheck;
+      setBreachEnabled(!!enabled);
+      if (!enabled) return;
+      const res = await send({ kind: 'breach_check' });
+      if (res.ok && res.kind === 'breach') setBreach(res.report);
     })();
   }, []);
 
@@ -55,6 +67,43 @@ export function Health({ onBack, onSelect }: { onBack: () => void; onSelect: (id
               <Stat n={report.counts.reused} label="Reused" />
               <Stat n={report.counts.old} label="Old" />
             </div>
+          </div>
+
+          {/* Compromised passwords (opt-in online check) */}
+          <div className="mb-4 rounded-2xl border border-white/[0.07] bg-white/5 p-4">
+            <div className="mb-1 text-sm font-semibold text-white/90">Compromised passwords</div>
+            {breachEnabled === false ? (
+              <p className="text-[11px] text-white/40">
+                The online breach check is off. Enable it under Settings → General to check your
+                passwords against known data breaches (only anonymous hash prefixes ever leave this
+                device).
+              </p>
+            ) : !breach ? (
+              <p className="text-[11px] text-white/40">Checking against known breaches…</p>
+            ) : breach.breached.length === 0 ? (
+              <p className="text-[11px] text-emerald-400">
+                None of your {breach.checked} checked passwords appear in known breaches.
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-[11px] text-red-400">
+                  {breach.breached.length} of {breach.checked} checked passwords appear in known
+                  breaches. Change them as soon as possible.
+                </p>
+                {breach.breached.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => onSelect(b.id)}
+                    className="mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition hover:bg-white/5"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm text-white/90">{b.name}</span>
+                    <span className="shrink-0 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] text-red-400">
+                      seen {b.count.toLocaleString()}×
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
 
           {flagged.length === 0 ? (

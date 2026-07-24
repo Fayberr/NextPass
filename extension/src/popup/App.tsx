@@ -61,6 +61,10 @@ const ADD_VIEW: Partial<Record<Category, View>> = {
 
 const POPUP_STATE_KEY = 'pm_popup_active_state';
 
+/** Desktop (Electron) renderer? The extension's auto-lock runs on chrome.alarms in the background
+ *  worker instead; only desktop needs the in-renderer idle timer / system-lock listener below. */
+const IS_DESKTOP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent);
+
 // Apply the persisted theme as early as possible (module load, before first paint settles).
 // Runs in both the extension popup and the Electron desktop renderer (shared App).
 if (typeof document !== 'undefined') {
@@ -93,6 +97,7 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
   const [syncing, setSyncing] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [counts, setCounts] = useState<Partial<Record<Category, number>>>({});
+  const [breachCount, setBreachCount] = useState(0);
 
   function updateView(newView: View, newCat: Category = category) {
     setView(newView);
@@ -147,6 +152,61 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
       }
     })();
   }, [state?.unlocked, view.name, reloadTick]);
+
+  // Desktop-only auto-lock: there is no background service worker (and thus no chrome.alarms) in
+  // the Electron renderer, so the inactivity timer lives here. Any input resets it; every 30s we
+  // compare idle time against the autoLockMinutes setting (read fresh, so changes apply live).
+  useEffect(() => {
+    if (!IS_DESKTOP || !state?.unlocked) return;
+    let last = Date.now();
+    const bump = () => { last = Date.now(); };
+    const events = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'] as const;
+    for (const ev of events) window.addEventListener(ev, bump, true);
+    const timer = setInterval(() => {
+      void (async () => {
+        const s = await getSettings();
+        if (s.autoLockMinutes > 0 && Date.now() - last >= s.autoLockMinutes * 60_000) {
+          await send({ kind: 'lock' });
+          await refresh();
+        }
+      })();
+    }, 30_000);
+    return () => {
+      clearInterval(timer);
+      for (const ev of events) window.removeEventListener(ev, bump, true);
+    };
+  }, [state?.unlocked]);
+
+  // Desktop-only: lock the vault when Windows locks / the machine suspends (opt-out in Settings).
+  useEffect(() => {
+    const api = (globalThis as { electronAPI?: { onSystemLock?: (cb: () => void) => void } }).electronAPI;
+    if (!api?.onSystemLock) return;
+    api.onSystemLock(() => {
+      void (async () => {
+        if (!(await getSettings()).lockOnSystemLock) return;
+        await send({ kind: 'lock' });
+        await refresh();
+      })();
+    });
+  }, []);
+
+  // Opt-in compromised-password check (HIBP k-anonymity), run once per unlock and after syncs.
+  // Feeds the red dot on Password Health; details live in the Health screen.
+  useEffect(() => {
+    if (!state?.unlocked) {
+      setBreachCount(0);
+      return;
+    }
+    void (async () => {
+      const s = await getSettings();
+      if (!s.breachCheck) {
+        setBreachCount(0);
+        return;
+      }
+      const res = await send({ kind: 'breach_check' });
+      if (res.ok && res.kind === 'breach') setBreachCount(res.report.breached.length);
+    })();
+  }, [state?.unlocked, reloadTick]);
 
   if (!state) {
     return <div className="p-6 text-center text-sm text-white/40">Loading…</div>;
@@ -364,6 +424,7 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
       syncing={syncing}
       onHealth={() => updateView({ name: 'health' })}
       onSettings={() => updateView({ name: 'settings' })}
+      healthAlert={breachCount > 0}
     >
       {content}
     </Shell>

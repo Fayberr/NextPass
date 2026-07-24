@@ -22,6 +22,7 @@ import {
   fromB64,
   fromB64url,
   fromUtf8,
+  utf8,
   itemMatchesUrl,
   auditVault,
   signAssertion,
@@ -50,6 +51,7 @@ import {
   type AccountMeta,
 } from './config.js';
 import { cacheClear, cacheDelete, cacheGetAll, cacheUpsert } from './storage.js';
+import { getSettings, isIgnoredSite } from './settings.js';
 import {
   wrapVaultKeyForDevice,
   unwrapVaultKeyForDevice,
@@ -63,6 +65,7 @@ import type {
   AutofillMatch,
   AutofillIdentityMatch,
   AutofillCardMatch,
+  BreachReport,
   ItemSummary,
   PasskeyCreateReq,
   PasskeyCreateRes,
@@ -1181,6 +1184,70 @@ export class SessionManager {
     return auditVault(inputs);
   }
 
+  /**
+   * Opt-in compromised-password check via the HIBP k-anonymity range API. Privacy model: only
+   * the first 5 hex chars of each password's SHA-1 hash are ever sent; the full hash (and the
+   * password itself) never leave the device. Gated on settings.breachCheck (off by default).
+   */
+  async breachAudit(): Promise<BreachReport> {
+    await this.hydrate();
+    this.requireKey();
+    if (!(await getSettings()).breachCheck) return { checked: 0, breached: [] };
+
+    // Collect unique passwords -> the login items using them.
+    const byPassword = new Map<string, { id: string; name: string }[]>();
+    for (const r of await cacheGetAll()) {
+      if (r.deletedAt || r.type !== 'login') continue;
+      const { fields } = await this.decryptRecord(r);
+      const pw = fields.password as string | undefined;
+      if (!pw) continue;
+      const list = byPassword.get(pw) ?? [];
+      list.push({ id: r.id, name: (fields.name as string) ?? '(no name)' });
+      byPassword.set(pw, list);
+    }
+
+    // SHA-1 each unique password, group by 5-char prefix so one range fetch can serve several.
+    const byPrefix = new Map<string, { suffix: string; items: { id: string; name: string }[] }[]>();
+    let checked = 0;
+    for (const [pw, items] of byPassword) {
+      checked += items.length;
+      const digest = await crypto.subtle.digest('SHA-1', utf8(pw) as BufferSource);
+      const hex = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .toUpperCase();
+      const prefix = hex.slice(0, 5);
+      const group = byPrefix.get(prefix) ?? [];
+      group.push({ suffix: hex.slice(5), items });
+      byPrefix.set(prefix, group);
+    }
+
+    const breached: BreachReport['breached'] = [];
+    for (const [prefix, group] of byPrefix) {
+      let body: string;
+      try {
+        const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+          headers: { 'Add-Padding': 'true' },
+        });
+        if (!res.ok) continue; // best-effort: skip this range on API hiccups
+        body = await res.text();
+      } catch {
+        continue;
+      }
+      const counts = new Map<string, number>();
+      for (const line of body.split('\n')) {
+        const [suffix, count] = line.trim().split(':');
+        if (suffix && count) counts.set(suffix.toUpperCase(), parseInt(count, 10) || 0);
+      }
+      for (const { suffix, items } of group) {
+        const count = counts.get(suffix) ?? 0;
+        if (count > 0) for (const it of items) breached.push({ ...it, count });
+      }
+    }
+    breached.sort((a, b) => b.count - a.count);
+    return { checked, breached };
+  }
+
   /** Soft-delete any item on the server and drop it from the local cache. */
   async deleteItem(id: string): Promise<void> {
     await this.hydrate();
@@ -1209,6 +1276,9 @@ export class SessionManager {
   /** navigator.credentials.create() - mint a passkey, store it as a vault item, return the attestation. */
   async passkeyCreate(req: PasskeyCreateReq): Promise<PasskeyCreateRes> {
     await this.hydrate();
+    if (isIgnoredSite((await getSettings()).ignoredPasskeySites, req.rpId)) {
+      throw new Error('NextPass ignores passkeys on this site (Settings → Ignored Websites).');
+    }
     const key = this.requireKey();
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
@@ -1268,6 +1338,9 @@ export class SessionManager {
   /** navigator.credentials.get() - find a matching passkey, sign the assertion, bump the counter. */
   async passkeyGet(req: PasskeyGetReq): Promise<PasskeyGetRes> {
     await this.hydrate();
+    if (isIgnoredSite((await getSettings()).ignoredPasskeySites, req.rpId)) {
+      throw new Error('NextPass ignores passkeys on this site (Settings → Ignored Websites).');
+    }
     const key = this.requireKey();
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
@@ -1322,6 +1395,10 @@ export class SessionManager {
   async autofillQuery(url: string): Promise<AutofillMatch[]> {
     await this.hydrate();
     if (!this.vaultKey) return [];
+    // Per-type toggle + ignored-websites list (Settings → Autofill). Gated here so both the
+    // extension background and the desktop in-renderer handler enforce it in one place.
+    const settings = await getSettings();
+    if (!settings.autofill.logins || isIgnoredSite(settings.ignoredSites, url)) return [];
     const records = await cacheGetAll();
     const matches: AutofillMatch[] = [];
     for (const r of records) {
@@ -1347,6 +1424,7 @@ export class SessionManager {
   async identityQuery(): Promise<AutofillIdentityMatch[]> {
     await this.hydrate();
     if (!this.vaultKey) return [];
+    if (!(await getSettings()).autofill.identities) return [];
     const records = await cacheGetAll();
     const matches: AutofillIdentityMatch[] = [];
     for (const r of records) {
@@ -1375,6 +1453,7 @@ export class SessionManager {
   async cardQuery(): Promise<AutofillCardMatch[]> {
     await this.hydrate();
     if (!this.vaultKey) return [];
+    if (!(await getSettings()).autofill.cards) return [];
     const records = await cacheGetAll();
     const matches: AutofillCardMatch[] = [];
     for (const r of records) {

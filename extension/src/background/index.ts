@@ -206,6 +206,9 @@ async function handle(msg: Msg): Promise<MsgResult> {
       case 'audit':
         return { ok: true, kind: 'audit', report: await session.audit() };
 
+      case 'breach_check':
+        return { ok: true, kind: 'breach', report: await session.breachAudit() };
+
       case 'get_settings':
         return { ok: true, kind: 'settings', settings: await getSettings() };
 

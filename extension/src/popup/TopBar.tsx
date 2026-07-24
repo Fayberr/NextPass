@@ -16,6 +16,7 @@ export function TopBar({
   syncing,
   onHealth,
   onSettings,
+  healthAlert,
 }: {
   search?: { value: string; onChange: (v: string) => void };
   onLock: () => void;
@@ -23,6 +24,8 @@ export function TopBar({
   syncing: boolean;
   onHealth: () => void;
   onSettings: () => void;
+  /** Breach check found compromised passwords - red dot on the menu + Health entry. */
+  healthAlert?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -53,6 +56,9 @@ export function TopBar({
       <div ref={menuRef} className="relative">
         <Button variant="subtle" onClick={() => setMenuOpen((o) => !o)} title="More">
           <MoreVertical size={16} />
+          {healthAlert && (
+            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+          )}
         </Button>
         {menuOpen && (
           <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-white/[0.07] bg-surface/95 p-1 shadow-glass backdrop-blur-xl">
@@ -75,6 +81,7 @@ export function TopBar({
               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-white/80 hover:bg-white/10"
             >
               <ShieldCheck size={15} /> Password Health
+              {healthAlert && <span className="ml-auto h-2 w-2 rounded-full bg-red-500" />}
             </button>
             <button
               type="button"

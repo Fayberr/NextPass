@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Textarea, Field, Select } from '../ui.js';
 import { ArrowLeft, Upload, Check, ShieldCheck, Chrome } from '../icons.js';
 import { send } from '../client.js';
@@ -30,8 +30,18 @@ interface ChromeImportResponse {
   undecryptable?: number;
   profiles?: number;
 }
+interface BrowserInfo {
+  id: string;
+  name: string;
+  installed: boolean;
+  launchable: boolean;
+  importable: boolean;
+}
 interface DesktopImportApi {
   chromeImport: () => Promise<ChromeImportResponse>;
+  /** Newer main process: whole Chromium family (Chrome/Edge/Brave/Opera/Opera GX/Chromium). */
+  browsersDetect?: () => Promise<BrowserInfo[]>;
+  browserImport?: (id: string) => Promise<ChromeImportResponse>;
 }
 function getChromeImporter(): DesktopImportApi | null {
   const api = (globalThis as { electronAPI?: Partial<DesktopImportApi> }).electronAPI;
@@ -70,6 +80,25 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
   const [stage, setStage] = useState<Stage>({ name: 'input' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Desktop direct import: which Chromium-family browsers have a password store on this PC.
+  const [browsers, setBrowsers] = useState<BrowserInfo[]>([]);
+  const [importBrowser, setImportBrowser] = useState<string>('chrome');
+
+  useEffect(() => {
+    const importer = getChromeImporter();
+    if (!IS_DESKTOP || !importer?.browsersDetect) return;
+    void importer
+      .browsersDetect()
+      .then((list) => {
+        const importable = list.filter((b) => b.importable);
+        setBrowsers(importable);
+        if (importable.length > 0 && !importable.some((b) => b.id === importBrowser)) {
+          setImportBrowser(importable[0]!.id);
+        }
+      })
+      .catch(() => setBrowsers([]));
+  }, []);
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -124,24 +153,29 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
     await toPreview(entries, skipped);
   }
 
-  /** Desktop-only: pull credentials straight from Chrome's encrypted store (no CSV export step). */
-  async function importFromChrome() {
+  /** Desktop-only: pull credentials straight from a browser's encrypted store (no CSV export step). */
+  async function importFromBrowser(id: string, name: string) {
     setError(null);
     const importer = getChromeImporter();
     if (!importer) return;
     setBusy(true);
     try {
-      const res = await importer.chromeImport();
+      // Newer preload exposes browserImport(id) for the whole Chromium family; older builds
+      // only have chromeImport() (Google Chrome). Fall back so both keep working.
+      const res =
+        importer.browserImport ? await importer.browserImport(id)
+        : id === 'chrome' ? await importer.chromeImport()
+        : { ok: false as const, error: `${name} import needs a newer NextPass desktop build.` };
       if (!res.ok) {
-        setError(res.error ?? "Couldn't read Chrome's passwords.");
+        setError(res.error ?? `Couldn't read ${name}'s passwords.`);
         return;
       }
       const { entries, skipped } = entriesFromCredentials(res.credentials ?? []);
-      // Fold anything Chrome-encrypted-but-undecryptable (e.g. newer app-bound "v20" items) into
+      // Fold anything encrypted-but-undecryptable (e.g. newer app-bound "v20" items) into
       // the skipped count so the preview reports them honestly rather than silently dropping them.
       await toPreview(entries, skipped + (res.undecryptable ?? 0));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Chrome import failed.');
+      setError(err instanceof Error ? err.message : `${name} import failed.`);
     } finally {
       setBusy(false);
     }
@@ -198,17 +232,46 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
                   <span className="px-2 text-[10px] uppercase tracking-wider text-white/30">or</span>
                   <div className="h-px flex-1 bg-white/10" />
                 </div>
-                <Button
-                  variant="subtle"
-                  className="w-full"
-                  onClick={importFromChrome}
-                  disabled={busy}
-                >
-                  <Chrome size={15} /> {busy ? 'Reading Chrome…' : 'Import directly from Google Chrome'}
-                </Button>
+                {browsers.length > 1 ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Select
+                        value={importBrowser}
+                        options={browsers.map((b) => ({ value: b.id, label: b.name }))}
+                        onChange={setImportBrowser}
+                      />
+                    </div>
+                    <Button
+                      variant="subtle"
+                      onClick={() => {
+                        const b = browsers.find((x) => x.id === importBrowser);
+                        if (b) void importFromBrowser(b.id, b.name);
+                      }}
+                      disabled={busy}
+                    >
+                      <Chrome size={15} /> {busy ? 'Reading…' : 'Import'}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="subtle"
+                    className="w-full"
+                    onClick={() => {
+                      const b = browsers[0] ?? { id: 'chrome', name: 'Google Chrome' };
+                      void importFromBrowser(b.id, b.name);
+                    }}
+                    disabled={busy}
+                  >
+                    <Chrome size={15} />{' '}
+                    {busy
+                      ? 'Reading…'
+                      : `Import directly from ${browsers[0]?.name ?? 'Google Chrome'}`}
+                  </Button>
+                )}
                 <p className="mt-1.5 text-[11px] leading-relaxed text-white/40">
-                  Reads your saved Chrome passwords directly - no export needed. Close Google Chrome
-                  first so its password file can be read.
+                  Reads the browser's saved passwords directly - no export needed. Close the browser
+                  first so its password file can be read. Chrome, Edge, Brave, Opera, Opera GX and
+                  Chromium are supported.
                 </p>
               </div>
             )}

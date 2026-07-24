@@ -21,6 +21,7 @@ export function DesktopAppShell({
   syncing,
   onHealth,
   onSettings,
+  healthAlert,
   children,
 }: AppShellProps) {
   return (
@@ -32,6 +33,7 @@ export function DesktopAppShell({
         onHealth={onHealth}
         onSettings={onSettings}
         counts={counts}
+        healthAlert={healthAlert}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <DesktopTopBar

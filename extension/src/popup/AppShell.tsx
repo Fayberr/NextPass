@@ -5,9 +5,12 @@ import { Sidebar, type Category } from './Sidebar.js';
 import { TopBar } from './TopBar.js';
 
 export interface AppShellProps {
-  active: Category | 'generator';
+  active: Category | 'generator' | 'health' | 'settings';
   onSelectCategory: (c: Category) => void;
   onGenerator: () => void;
+  /** Per-category item counts for shells that render count badges (desktop's labeled
+   *  sidebar); the popup's narrow icon rail has no room for them and ignores this. */
+  counts?: Partial<Record<Category, number>>;
   search?: { value: string; onChange: (v: string) => void };
   onLock: () => void;
   onSync: () => void;

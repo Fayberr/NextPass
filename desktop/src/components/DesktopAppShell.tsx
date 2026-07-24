@@ -1,8 +1,9 @@
 /**
  * Desktop's own shell, swapped in via the `Shell` prop on the shared extension `App` component
  * (see extension/src/popup/App.tsx). Same screens/state/routing as the Chrome extension popup,
- * but a bigger, more spacious chrome around them: a wider icon rail with Health/Settings pinned
- * to the bottom, and a top bar with Sync living next to Lock instead of behind a "⋮" menu.
+ * but a bigger, more spacious chrome around them: a labeled sidebar (icons + labels + count
+ * badges) with Health/Settings pinned to the bottom, and a top bar with Sync living next to
+ * Lock instead of behind a "more" menu.
  */
 
 import type { AppShellProps } from '../../../extension/src/popup/AppShell.js';
@@ -13,6 +14,7 @@ export function DesktopAppShell({
   active,
   onSelectCategory,
   onGenerator,
+  counts,
   search,
   onLock,
   onSync,
@@ -29,6 +31,7 @@ export function DesktopAppShell({
         onGenerator={onGenerator}
         onHealth={onHealth}
         onSettings={onSettings}
+        counts={counts}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <DesktopTopBar search={search} onLock={onLock} onSync={onSync} syncing={syncing} />

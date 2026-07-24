@@ -82,6 +82,7 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
   const [q, setQ] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  const [counts, setCounts] = useState<Partial<Record<Category, number>>>({});
 
   function updateView(newView: View, newCat: Category = category) {
     setView(newView);
@@ -117,6 +118,25 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
       } catch {}
     }
   }, []);
+
+  // Keep per-category counts fresh for shells that show badges (desktop sidebar). Re-fetching
+  // on every view change is cheap - list_items decrypts summaries already held in memory - and
+  // covers all mutation paths, since add/edit/delete always navigate to another view after.
+  useEffect(() => {
+    if (!state?.unlocked) return;
+    void (async () => {
+      const res = await send({ kind: 'list_items' });
+      if (res.ok && res.kind === 'items') {
+        const next: Partial<Record<Category, number>> = {};
+        for (const it of res.items) {
+          const t = it.type as Category;
+          next[t] = (next[t] ?? 0) + 1;
+          if (it.favorite) next.favorites = (next.favorites ?? 0) + 1;
+        }
+        setCounts(next);
+      }
+    })();
+  }, [state?.unlocked, view.name, reloadTick]);
 
   if (!state) {
     return <div className="p-6 text-center text-sm text-white/40">Loading…</div>;
@@ -315,9 +335,14 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
 
   return (
     <Shell
-      active={view.name === 'generator' ? 'generator' : category}
+      active={
+        view.name === 'generator' || view.name === 'health' || view.name === 'settings'
+          ? view.name
+          : category
+      }
       onSelectCategory={updateCategory}
       onGenerator={() => updateView({ name: 'generator' })}
+      counts={counts}
       search={view.name === 'list' ? { value: q, onChange: setQ } : undefined}
       onLock={doLock}
       onSync={doSync}

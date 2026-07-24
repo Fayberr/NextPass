@@ -70,7 +70,7 @@ export function Sidebar({
   onSelect,
   onGenerator,
 }: {
-  active: Category | 'generator';
+  active: Category | 'generator' | 'health' | 'settings';
   onSelect: (c: Category) => void;
   onGenerator: () => void;
 }) {

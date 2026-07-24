@@ -13,6 +13,11 @@ const kdfParamsSchema = z.object({
   v: z.number().int().positive(),
 });
 
+const deviceSchema = z.object({
+  platform: z.string().min(1).max(64),
+  installId: z.string().min(1).max(128).optional(),
+});
+
 const registerSchema = z.object({
   identifier: z.string().min(1).max(320),
   isAdmin: z.boolean(),
@@ -22,7 +27,7 @@ const registerSchema = z.object({
   wrappedKeyByMasterPw: z.string().min(1),
   wrappedKeyByAdmin: z.string().nullable(),
   wrappedKeyByRecovery: z.string().min(1),
-  device: z.object({ platform: z.string().min(1).max(64) }),
+  device: deviceSchema,
 });
 
 const googleAuthSchema = z.object({
@@ -38,7 +43,7 @@ const preloginSchema = z.object({ identifier: z.string().min(1).max(320) });
 const loginSchema = z.object({
   identifier: z.string().min(1).max(320),
   authKeyHash: z.string().min(1),
-  device: z.object({ platform: z.string().min(1).max(64) }),
+  device: deviceSchema,
 });
 
 const b64 = (s: string) => Buffer.from(s, 'base64');
@@ -57,15 +62,41 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
      VALUES (@id, @user_id, @m, @admin, @recovery, @now, @now)`,
   );
   const insertDevice = db.prepare(
-    `INSERT INTO devices (id, user_id, platform, token_hash, last_sync_cursor, created_at, last_seen_at)
-     VALUES (@id, @user_id, @platform, @token_hash, 0, @now, @now)`,
+    `INSERT INTO devices (id, user_id, platform, token_hash, install_id, last_sync_cursor, created_at, last_seen_at)
+     VALUES (@id, @user_id, @platform, @token_hash, @install_id, 0, @now, @now)`,
+  );
+  const findDeviceByInstall = db.prepare(
+    'SELECT id FROM devices WHERE user_id = ? AND install_id = ?',
+  );
+  const reauthDevice = db.prepare(
+    'UPDATE devices SET platform = ?, token_hash = ?, last_seen_at = ? WHERE id = ?',
   );
   const getVault = db.prepare('SELECT * FROM vaults WHERE user_id = ?');
 
-  function makeDevice(userId: string, platform: string, now: number) {
+  /**
+   * Pair (or re-pair) a device. When the client sends a stable `installId` and a device with
+   * that install already exists for this user, reuse that row (rotate its token, refresh
+   * platform/last_seen) instead of inserting a new one - this is what keeps "Connected devices"
+   * from growing a fresh entry every time the same extension/app install logs in again.
+   */
+  function makeDevice(userId: string, platform: string, now: number, installId?: string) {
     const { token, tokenHash } = issueDeviceToken();
+    if (installId) {
+      const existing = findDeviceByInstall.get(userId, installId) as { id: string } | undefined;
+      if (existing) {
+        reauthDevice.run(platform, tokenHash, now, existing.id);
+        return { deviceId: existing.id, token };
+      }
+    }
     const deviceId = newId();
-    insertDevice.run({ id: deviceId, user_id: userId, platform, token_hash: tokenHash, now });
+    insertDevice.run({
+      id: deviceId,
+      user_id: userId,
+      platform,
+      token_hash: tokenHash,
+      install_id: installId ?? null,
+      now,
+    });
     return { deviceId, token };
   }
 
@@ -234,7 +265,7 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
         recovery: b64(body.wrappedKeyByRecovery),
         now,
       });
-      return makeDevice(userId, body.device.platform, now);
+      return makeDevice(userId, body.device.platform, now, body.device.installId);
     });
 
     const { deviceId, token } = tx();
@@ -295,7 +326,7 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
       wrapped_key_by_recovery: Buffer;
     };
     const now = Date.now();
-    const { deviceId, token } = makeDevice(user!.id, body.device.platform, now);
+    const { deviceId, token } = makeDevice(user!.id, body.device.platform, now, body.device.installId);
 
     const res: AuthResponse = {
       userId: user!.id,

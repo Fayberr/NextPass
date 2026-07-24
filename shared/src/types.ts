@@ -31,6 +31,14 @@ export interface RegistrationPayload {
 
 export interface DeviceRegistration {
   platform: string;
+  /**
+   * Stable per-install identifier (random UUID, generated once and cached client-side,
+   * independent of the account/device token). Lets the server recognize "this is the same
+   * extension/app install re-authenticating" and reuse its existing device row (rotating the
+   * token) instead of minting a brand-new "Connected devices" entry on every login. Optional so
+   * older clients that don't send it yet still work (they just always get a fresh row, as before).
+   */
+  installId?: string;
 }
 
 /** Local-only result of registration - the recovery phrase is shown ONCE and never stored. */

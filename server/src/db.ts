@@ -20,6 +20,13 @@ export function openDb(dbPath: string): DB {
   try {
     db.exec('ALTER TABLE users ADD COLUMN google_email TEXT');
   } catch {}
+  try {
+    // Stable per-install id (see shared DeviceRegistration.installId) so re-authenticating from
+    // the same extension/app install reuses its existing row instead of piling up duplicates.
+    // NULL for rows paired before this column existed - those just never get deduped.
+    db.exec('ALTER TABLE devices ADD COLUMN install_id TEXT');
+  } catch {}
+  db.exec('CREATE INDEX IF NOT EXISTS idx_devices_user_install ON devices(user_id, install_id)');
 
   return db;
 }

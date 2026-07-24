@@ -48,6 +48,8 @@ export async function createRecoveryPhrase(vaultKey: Uint8Array): Promise<{ mnem
 export interface CreateRegistrationOptions {
   isAdmin?: boolean;
   platform?: string;
+  /** See `DeviceRegistration.installId` - stable per-install id so the server can dedupe. */
+  installId?: string;
   kdfParams?: KdfParams;
 }
 
@@ -97,7 +99,7 @@ export async function createRegistration(
       wrappedKeyByMasterPw: toB64(wrappedKeyByMasterPw),
       wrappedKeyByAdmin: wrappedKeyByAdmin ? toB64(wrappedKeyByAdmin) : null,
       wrappedKeyByRecovery: toB64(wrappedKeyByRecovery),
-      device: { platform: opts.platform ?? 'unknown' },
+      device: { platform: opts.platform ?? 'unknown', installId: opts.installId },
     },
   };
 }

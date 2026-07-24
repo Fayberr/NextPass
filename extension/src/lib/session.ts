@@ -82,6 +82,35 @@ const PLATFORM =
     ? 'desktop'
     : 'extension';
 
+/**
+ * Stable per-install identifier, generated once and cached under its own storage key (separate
+ * from `pm.account`, so it survives logout/re-login on the same install). Sent with every
+ * register()/login() so the server can recognize "this is still the same extension/app install"
+ * and reuse its existing Connected-devices row (rotating the token) instead of piling up a new
+ * row every time - previously every fresh login minted a brand-new device record forever.
+ */
+const INSTALL_ID_KEY = 'pm.installId';
+
+async function getOrCreateInstallId(): Promise<string> {
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const got = await chrome.storage.local.get(INSTALL_ID_KEY);
+    const existing = got[INSTALL_ID_KEY] as string | undefined;
+    if (existing) return existing;
+    const fresh = crypto.randomUUID();
+    await chrome.storage.local.set({ [INSTALL_ID_KEY]: fresh });
+    return fresh;
+  }
+  try {
+    const existing = localStorage.getItem(INSTALL_ID_KEY);
+    if (existing) return existing;
+    const fresh = crypto.randomUUID();
+    localStorage.setItem(INSTALL_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return crypto.randomUUID(); // best-effort fallback if storage is unavailable
+  }
+}
+
 const PENDING_RECOVERY_KEY = 'pendingRecovery';
 const VAULT_KEY_KEY = 'vaultKey';
 
@@ -389,6 +418,7 @@ export class SessionManager {
     this.lastError = null;
     const { payload, recoveryMnemonic } = await createRegistration(identifier, password, {
       platform: PLATFORM,
+      installId: await getOrCreateInstallId(),
     });
     const api = new ApiClient(serverUrl);
     const auth = await api.register(payload);
@@ -424,7 +454,11 @@ export class SessionManager {
     const api = new ApiClient(serverUrl);
     const pre = await api.prelogin(identifier);
     const authKeyHash = await deriveAuthKeyHash(password, pre.masterPwSalt, pre.kdfParams);
-    const auth = await api.login({ identifier, authKeyHash, device: { platform: PLATFORM } });
+    const auth = await api.login({
+      identifier,
+      authKeyHash,
+      device: { platform: PLATFORM, installId: await getOrCreateInstallId() },
+    });
 
     await saveAccount({
       serverUrl,

@@ -427,15 +427,14 @@ const CLIP_OPTIONS = [
  *  left, one section's content on the right); the 360px popup keeps its single scroll column. */
 const IS_DESKTOP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent);
 
-type PaneId = 'general' | 'autofill' | 'browsers' | 'account' | 'devices' | 'password' | 'backup' | 'danger';
+type PaneId = 'general' | 'autofill' | 'browsers' | 'account' | 'devices' | 'backup' | 'danger';
 
 const PANES: { id: PaneId; label: string; danger?: boolean; desktopOnly?: boolean }[] = [
   { id: 'general', label: 'General' },
   { id: 'autofill', label: 'Autofill & Websites' },
   { id: 'browsers', label: 'Browsers', desktopOnly: true },
-  { id: 'account', label: 'Google Account' },
+  { id: 'account', label: 'Account & Security' },
   { id: 'devices', label: 'Connected Devices' },
-  { id: 'password', label: 'Master Password' },
   { id: 'backup', label: 'Backup & Restore' },
   { id: 'danger', label: 'Danger Zone', danger: true },
 ];
@@ -614,6 +613,32 @@ export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: 
       const res = await send({ kind: 'revoke_device', id: d.id });
       if (res.ok && res.kind === 'devices') setDevices(res.devices);
       else if (!res.ok) setDevicesError(res.error || 'Failed to revoke device.');
+    } catch (err) {
+      setDevicesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  /** Bulk cleanup for accounts with a lot of stale/duplicate entries (e.g. from repeated re-pairing
+   *  before device dedup existed) - revokes every device except the one currently in use. */
+  async function handleRevokeAllOtherDevices() {
+    const others = (devices ?? []).filter((d) => !d.current);
+    if (others.length === 0) return;
+    if (!confirm(`Sign out ${others.length} other device(s)? Each will need the master password to pair again.`)) return;
+    setRevokingId('__all__');
+    setDevicesError(null);
+    try {
+      let last: DeviceInfo[] | null = null;
+      for (const d of others) {
+        const res = await send({ kind: 'revoke_device', id: d.id });
+        if (res.ok && res.kind === 'devices') last = res.devices;
+        else if (!res.ok) {
+          setDevicesError(res.error || 'Failed to revoke one or more devices.');
+          break;
+        }
+      }
+      if (last) setDevices(last);
     } catch (err) {
       setDevicesError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -994,7 +1019,7 @@ export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: 
         {/* Desktop-only: startup + hotkey (Electron renderer only) */}
         {show('general') && desktopApi && <DesktopSection api={desktopApi} />}
 
-        {/* Google Account */}
+        {/* Account & Security: Google linking + device-unlock + master password change */}
         {show('account') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Google Account</h2>
@@ -1071,56 +1096,8 @@ export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: 
         </section>
         )}
 
-        {/* Connected Devices */}
-        {show('devices') && (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Connected Devices</h2>
-          <Card className="p-3">
-            {devices === null && !devicesError && (
-              <p className="text-[11px] text-white/40">Loading devices…</p>
-            )}
-            {devicesError && <p className="text-xs text-rose-400">{devicesError}</p>}
-            {devices !== null && devices.length === 0 && (
-              <p className="text-[11px] text-white/40">No paired devices.</p>
-            )}
-            {devices !== null && devices.length > 0 && (
-              <ul className="divide-y divide-white/5">
-                {devices.map((d) => (
-                  <li key={d.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
-                    <PlatformIcon platform={d.platform} />
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-2 text-xs font-medium text-white/90">
-                        {platformLabel(d.platform)}
-                        {d.current && (
-                          <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-                            This device
-                          </span>
-                        )}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-white/40">
-                        Paired {new Date(d.createdAt).toLocaleDateString()} · Last seen {fmtWhen(d.lastSeenAt)}
-                      </p>
-                    </div>
-                    {!d.current && (
-                      <Button
-                        variant="subtle"
-                        onClick={() => void handleRevokeDevice(d)}
-                        disabled={revokingId !== null}
-                        className="shrink-0 text-rose-400 hover:text-rose-300"
-                      >
-                        {revokingId === d.id ? 'Revoking…' : 'Revoke'}
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </section>
-        )}
-
-        {/* Change Master Password */}
-        {show('password') && (
+        {/* Change Master Password (same "Account & Security" tab as Google Account, above) */}
+        {show('account') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Change Master Password</h2>
           <Card className="p-3">
@@ -1166,6 +1143,71 @@ export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: 
                 {pwBusy ? 'Updating...' : 'Update Master Password'}
               </Button>
             </form>
+          </Card>
+        </section>
+        )}
+
+        {/* Connected Devices */}
+        {show('devices') && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Connected Devices</h2>
+            {devices !== null && devices.filter((d) => !d.current).length > 1 && (
+              <button
+                type="button"
+                onClick={() => void handleRevokeAllOtherDevices()}
+                disabled={revokingId !== null}
+                className="text-[11px] font-medium text-rose-400 hover:text-rose-300 disabled:opacity-50"
+              >
+                {revokingId === '__all__' ? 'Signing out…' : 'Sign out all others'}
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] leading-relaxed text-white/40">
+            Each re-pairing used to add a new entry here, even from the same install - that's
+            fixed now, but old duplicate entries from before the fix are still listed below.
+            Use "Sign out all others" to clear them out in one go.
+          </p>
+          <Card className="p-3">
+            {devices === null && !devicesError && (
+              <p className="text-[11px] text-white/40">Loading devices…</p>
+            )}
+            {devicesError && <p className="text-xs text-rose-400">{devicesError}</p>}
+            {devices !== null && devices.length === 0 && (
+              <p className="text-[11px] text-white/40">No paired devices.</p>
+            )}
+            {devices !== null && devices.length > 0 && (
+              <ul className="divide-y divide-white/5">
+                {devices.map((d) => (
+                  <li key={d.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+                    <PlatformIcon platform={d.platform} />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 text-xs font-medium text-white/90">
+                        {platformLabel(d.platform)}
+                        {d.current && (
+                          <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                            This device
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-white/40">
+                        Paired {new Date(d.createdAt).toLocaleDateString()} · Last seen {fmtWhen(d.lastSeenAt)}
+                      </p>
+                    </div>
+                    {!d.current && (
+                      <Button
+                        variant="subtle"
+                        onClick={() => void handleRevokeDevice(d)}
+                        disabled={revokingId !== null}
+                        className="shrink-0 text-rose-400 hover:text-rose-300"
+                      >
+                        {revokingId === d.id ? 'Revoking…' : 'Revoke'}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         </section>
         )}

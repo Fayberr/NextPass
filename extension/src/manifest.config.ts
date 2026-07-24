@@ -10,7 +10,7 @@ import { defineManifest } from '@crxjs/vite-plugin';
 export default defineManifest({
   manifest_version: 3,
   name: 'NextPass',
-  version: '0.15.1',
+  version: '0.15.2',
   description:
     'NextPass - The next Generation Password Manager. Self-hosted, zero-knowledge password manager with one-click autofill, password generator, passkey (WebAuthn) support, Google sign-in with optional Google-only unlock on remembered devices, connected-device management with remote revoke, and encrypted vault storage.',
   action: {

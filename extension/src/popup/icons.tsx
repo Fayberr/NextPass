@@ -236,6 +236,27 @@ export function Monitor(props: IconProps) {
   );
 }
 
+export function LayoutGrid(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect width="7" height="7" x="3" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="3" rx="1" />
+      <rect width="7" height="7" x="14" y="14" rx="1" />
+      <rect width="7" height="7" x="3" y="14" rx="1" />
+    </Svg>
+  );
+}
+
+export function Rows(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M21 9H3" />
+      <path d="M21 15H3" />
+    </Svg>
+  );
+}
+
 export function UserRound(props: IconProps) {
   return (
     <Svg {...props}>

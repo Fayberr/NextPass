@@ -14,6 +14,8 @@ import {
   Copy,
   Check,
   ChevronDown,
+  LayoutGrid,
+  Rows,
 } from '../icons.js';
 import { send } from '../client.js';
 import { copyWithClear } from '../clipboard.js';
@@ -236,6 +238,23 @@ function FaviconIcon({
   return <span className="text-xs text-white/40">{name.charAt(0).toUpperCase()}</span>;
 }
 
+/** Desktop-only affordance: the 360px popup stays list-only, but the desktop window has room
+ *  for a Kaspersky-style card grid, so the grid/list toggle renders only under Electron. */
+const IS_DESKTOP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent);
+
+const VIEW_MODE_KEY = 'pm_vault_view_mode';
+
+type ViewMode = 'grid' | 'list';
+
+function initialViewMode(): ViewMode {
+  if (!IS_DESKTOP) return 'list';
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === 'list' || v === 'grid') return v;
+  } catch {}
+  return 'grid';
+}
+
 interface ItemGroup {
   key: string;
   items: ItemSummary[];
@@ -388,6 +407,14 @@ export function VaultList({
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+
+  function switchView(mode: ViewMode) {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {}
+  }
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => {
@@ -557,6 +584,101 @@ export function VaultList({
     );
   }
 
+  /** Grid-mode card: same data + lazy hover quick-fields as a list row, just laid out as a
+   *  Kaspersky-style tile. Login grouping is intentionally skipped here - in a grid, one card
+   *  per account reads better than a nested "N accounts" tile. */
+  function renderCard(item: ItemSummary) {
+    const site = item.uris.find(Boolean);
+    const RowIcon = ROW_ICON[item.type as Category];
+    const isOpen = openId === item.id;
+    const quickFields = quickFieldsFor(item.type, detail[item.id]);
+    return (
+      <div
+        key={item.id}
+        onMouseEnter={() => handleEnter(item.id)}
+        onMouseLeave={() => handleLeave(item.id)}
+        className="flex flex-col rounded-2xl border border-[rgba(255,255,255,0.06)] bg-white/[0.035] p-4 transition-colors duration-200 ease-out hover:border-violet-glow/25 hover:bg-white/[0.055]"
+      >
+        <div className="flex w-full items-start gap-3">
+          <button onClick={() => onSelect(item.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+              {item.totp ? (
+                <KeyRound size={18} className="text-violet-soft" />
+              ) : (
+                <FaviconIcon uris={item.uris} name={item.name} fallbackIcon={RowIcon} />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold tracking-tight text-white/90">{item.name}</div>
+              {(item.username || site) && (
+                <div className="mt-1 truncate text-xs text-white/40">{item.username || site}</div>
+              )}
+            </div>
+          </button>
+          <span
+            role="button"
+            tabIndex={0}
+            title={item.favorite ? 'Unfavorite' : 'Favorite'}
+            onClick={(e) => {
+              e.stopPropagation();
+              void toggleFav(item.id, !item.favorite);
+            }}
+            className={`shrink-0 cursor-pointer rounded-md p-1 transition hover:bg-white/10 ${
+              item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
+            }`}
+          >
+            <Star size={14} filled={item.favorite} />
+          </span>
+        </div>
+
+        {item.totp && (
+          <div className="mt-3">
+            <TotpCode secret={item.totp} label="" compact />
+          </div>
+        )}
+
+        {quickFields.length > 0 && (
+          <div
+            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+              isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div className="mt-3 space-y-1.5 border-t border-[rgba(255,255,255,0.06)] pt-2.5">
+                {quickFields.map((f) => {
+                  const key = `${item.id}:${f.key}`;
+                  return (
+                    <QuickRow
+                      key={f.key}
+                      field={f}
+                      revealed={revealed.has(key)}
+                      copied={copiedKey === key}
+                      onToggleReveal={() => toggleReveal(key)}
+                      onCopy={() => void copyField(key, f.value)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {site && (
+          <a
+            href={siteHref(site)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
+          >
+            <ExternalLink size={13} />
+            Open site
+          </a>
+        )}
+      </div>
+    );
+  }
+
   function renderGroup(group: ItemGroup) {
     const first = group.items[0];
     if (!first) return null;
@@ -606,6 +728,34 @@ export function VaultList({
         <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/40">
           {byCategory.length}
         </span>
+        {IS_DESKTOP && (
+          <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-[rgba(255,255,255,0.07)] bg-white/[0.03] p-0.5">
+            <button
+              type="button"
+              title="Grid view"
+              onClick={() => switchView('grid')}
+              className={`rounded-md p-1 transition ${
+                viewMode === 'grid'
+                  ? 'bg-violet-glow/15 text-violet-soft'
+                  : 'text-white/30 hover:bg-white/5 hover:text-white/60'
+              }`}
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              type="button"
+              title="List view"
+              onClick={() => switchView('list')}
+              className={`rounded-md p-1 transition ${
+                viewMode === 'list'
+                  ? 'bg-violet-glow/15 text-violet-soft'
+                  : 'text-white/30 hover:bg-white/5 hover:text-white/60'
+              }`}
+            >
+              <Rows size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -615,6 +765,10 @@ export function VaultList({
           <p className="p-4 text-center text-xs text-white/30">
             {byCategory.length === 0 ? 'No items yet.' : 'No matches.'}
           </p>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] items-start gap-3 p-1">
+            {filtered.map((item) => renderCard(item))}
+          </div>
         ) : (
           groups.map((group) => renderGroup(group))
         )}

@@ -6,6 +6,7 @@
 
 import type {
   AuditReport,
+  DeviceInfo,
   LoginFields,
   TotpFields,
   SecretFields,
@@ -93,7 +94,9 @@ export type Msg =
   | { kind: 'forget_device' }
   | { kind: 'device_unlock'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
   | { kind: 'google_signin' }
-  | { kind: 'open_unlock_ui' };
+  | { kind: 'open_unlock_ui' }
+  | { kind: 'list_devices' }
+  | { kind: 'revoke_device'; id: string };
 
 export type MsgResult =
   | { ok: true; kind: 'google_auth_result'; res: import('@pm/shared').GoogleAuthResponse }
@@ -116,6 +119,7 @@ export type MsgResult =
   | { ok: true; kind: 'purge_result'; backupData?: string; backupFilename?: string }
   | { ok: true; kind: 'passkey_created'; res: PasskeyCreateRes }
   | { ok: true; kind: 'passkey_asserted'; res: PasskeyGetRes }
+  | { ok: true; kind: 'devices'; devices: DeviceInfo[] }
   | { ok: true; kind: 'void' }
   | { ok: false; error: string };
 

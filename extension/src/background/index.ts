@@ -115,6 +115,13 @@ async function handle(msg: Msg): Promise<MsgResult> {
         await session.forgetDevice();
         return { ok: true, kind: 'state', state: await session.getState() };
 
+      case 'list_devices':
+        return { ok: true, kind: 'devices', devices: await session.listDevices() };
+
+      case 'revoke_device':
+        await session.revokeDevice(msg.id);
+        return { ok: true, kind: 'devices', devices: await session.listDevices() };
+
       case 'device_unlock':
         await session.unlockWithDevice(msg.serverUrl, msg.googleUser);
         await syncProxyAttachment();

@@ -1,8 +1,46 @@
 import { useEffect, useState } from 'react';
 import { Button, Field, Input, Select, Card, Checkbox } from '../ui.js';
-import { ArrowLeft, Lock, Download, Upload, AlertTriangle, ShieldCheck, Check, GoogleIcon } from '../icons.js';
+import {
+  ArrowLeft,
+  Lock,
+  Download,
+  Upload,
+  AlertTriangle,
+  ShieldCheck,
+  Check,
+  GoogleIcon,
+  Globe,
+  Monitor,
+  Smartphone,
+} from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
+import type { DeviceInfo } from '@pm/shared';
+
+function platformLabel(platform: string): string {
+  switch (platform) {
+    case 'extension': return 'Browser extension';
+    case 'desktop': return 'Desktop app';
+    case 'android': return 'Android app';
+    default: return platform;
+  }
+}
+
+function PlatformIcon({ platform }: { platform: string }) {
+  const cls = 'h-4 w-4 text-white/50';
+  if (platform === 'extension') return <Globe className={cls} />;
+  if (platform === 'android') return <Smartphone className={cls} />;
+  return <Monitor className={cls} />;
+}
+
+/** "just now" / "12m ago" / "5h ago" / locale date - for the devices list's last-seen line. */
+function fmtWhen(ms: number): string {
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return new Date(ms).toLocaleDateString();
+}
 
 const LOCK_OPTIONS = [
   { value: 0, label: 'Never' },
@@ -157,6 +195,46 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
+  // Connected devices state
+  const [devices, setDevices] = useState<DeviceInfo[] | null>(null);
+  const [devicesError, setDevicesError] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  async function loadDevices() {
+    try {
+      const res = await send({ kind: 'list_devices' });
+      if (res.ok && res.kind === 'devices') {
+        setDevices(res.devices);
+        setDevicesError(null);
+      } else if (!res.ok) {
+        setDevicesError(res.error || 'Could not load devices.');
+      }
+    } catch (err) {
+      setDevicesError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleRevokeDevice(d: DeviceInfo) {
+    if (
+      !confirm(
+        `Sign out "${platformLabel(d.platform)}" (paired ${new Date(d.createdAt).toLocaleDateString()})? ` +
+          'It will need the master password to pair again.',
+      )
+    )
+      return;
+    setRevokingId(d.id);
+    setDevicesError(null);
+    try {
+      const res = await send({ kind: 'revoke_device', id: d.id });
+      if (res.ok && res.kind === 'devices') setDevices(res.devices);
+      else if (!res.ok) setDevicesError(res.error || 'Failed to revoke device.');
+    } catch (err) {
+      setDevicesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
   // Device-remember ("Enable Google auth only login") state
   const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
   const [deviceUnlockAvailable, setDeviceUnlockAvailable] = useState(false);
@@ -177,6 +255,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
       const res = await send({ kind: 'get_settings' });
       if (res.ok && res.kind === 'settings') setS(res.settings);
       await refreshState();
+      await loadDevices();
     })();
   }, []);
 
@@ -428,6 +507,52 @@ export function Settings({ onBack }: { onBack: () => void }) {
               )}
             </Card>
           )}
+        </section>
+
+        {/* Connected Devices */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Connected Devices</h2>
+          <Card className="p-3">
+            {devices === null && !devicesError && (
+              <p className="text-[11px] text-white/40">Loading devices…</p>
+            )}
+            {devicesError && <p className="text-xs text-rose-400">{devicesError}</p>}
+            {devices !== null && devices.length === 0 && (
+              <p className="text-[11px] text-white/40">No paired devices.</p>
+            )}
+            {devices !== null && devices.length > 0 && (
+              <ul className="divide-y divide-white/5">
+                {devices.map((d) => (
+                  <li key={d.id} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+                    <PlatformIcon platform={d.platform} />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 text-xs font-medium text-white/90">
+                        {platformLabel(d.platform)}
+                        {d.current && (
+                          <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                            This device
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-white/40">
+                        Paired {new Date(d.createdAt).toLocaleDateString()} · Last seen {fmtWhen(d.lastSeenAt)}
+                      </p>
+                    </div>
+                    {!d.current && (
+                      <Button
+                        variant="subtle"
+                        onClick={() => void handleRevokeDevice(d)}
+                        disabled={revokingId !== null}
+                        className="shrink-0 text-rose-400 hover:text-rose-300"
+                      >
+                        {revokingId === d.id ? 'Revoking…' : 'Revoke'}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </section>
 
         {/* Change Master Password */}

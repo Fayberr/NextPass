@@ -27,6 +27,7 @@ import {
   signAssertion,
   type AuditInput,
   type AuditReport,
+  type DeviceInfo,
   toB64,
   unlockWithMasterPassword,
   unlockWithRecovery,
@@ -69,7 +70,13 @@ import type {
   VaultState,
 } from './messages.js';
 
-const PLATFORM = 'extension';
+/** Which client this is, as recorded on the paired device record server-side (shown in the
+ *  Settings devices list). The desktop app runs this same code in its Electron renderer, so
+ *  detect that case rather than labeling every pairing 'extension'. */
+const PLATFORM =
+  typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent)
+    ? 'desktop'
+    : 'extension';
 
 const PENDING_RECOVERY_KEY = 'pendingRecovery';
 const VAULT_KEY_KEY = 'vaultKey';
@@ -211,6 +218,23 @@ export class SessionManager {
     const acct = await getAccount();
     if (!acct) throw new Error('Not configured.');
     return await this.api(acct).unlinkGoogle();
+  }
+
+  // --- device/session management (Settings > Devices) ---
+
+  async listDevices(): Promise<DeviceInfo[]> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    const res = await this.api(acct).listDevices();
+    return res.devices;
+  }
+
+  /** Remote-revoke a paired device's bearer token (e.g. a lost phone). The UI prevents
+   *  revoking the current device, but the server would allow it (it just logs us out). */
+  async revokeDevice(id: string): Promise<void> {
+    const acct = await getAccount();
+    if (!acct) throw new Error('Not configured.');
+    await this.api(acct).revokeDevice(id);
   }
 
   async googleAuth(

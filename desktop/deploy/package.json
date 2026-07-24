@@ -1,0 +1,10 @@
+{
+  "name": "nextpass-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "start": "electron ."
+  }
+}

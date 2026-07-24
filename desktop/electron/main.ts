@@ -42,7 +42,10 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
-    mainWindow?.webContents.openDevTools({ mode: 'detach' });
+    // Detached devtools only during dev - never auto-open in the deployed app.
+    if (VITE_DEV_SERVER_URL) {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' });
+    }
   });
 
   if (VITE_DEV_SERVER_URL) {

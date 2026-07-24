@@ -117,6 +117,28 @@ function createWindow() {
     },
   });
 
+  // Every link/window the renderer tries to open goes to the system default browser -
+  // never a child Electron window. Covers target="_blank" anchors (e.g. the vault
+  // cards' "Open site") and window.open alike.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  // Same guard for in-place navigations: the window must never leave the app itself
+  // (dev-server URL or the bundled index.html) - anything else opens externally.
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const internal = VITE_DEV_SERVER_URL ? url.startsWith(VITE_DEV_SERVER_URL) : url.startsWith('file://');
+    if (!internal) {
+      e.preventDefault();
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        void shell.openExternal(url);
+      }
+    }
+  });
+
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     console.log(`[Renderer Console ${level}] ${message} (${sourceId}:${line})`);
   });

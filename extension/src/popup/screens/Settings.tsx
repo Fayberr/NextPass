@@ -212,6 +212,21 @@ const CLIP_OPTIONS = [
   { value: 120, label: '2 minutes' },
 ];
 
+/** Desktop-only: the wide Electron window renders Settings as two panes (section nav on the
+ *  left, one section's content on the right); the 360px popup keeps its single scroll column. */
+const IS_DESKTOP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent);
+
+type PaneId = 'general' | 'account' | 'devices' | 'password' | 'backup' | 'danger';
+
+const PANES: { id: PaneId; label: string; danger?: boolean }[] = [
+  { id: 'general', label: 'General' },
+  { id: 'account', label: 'Google Account' },
+  { id: 'devices', label: 'Connected Devices' },
+  { id: 'password', label: 'Master Password' },
+  { id: 'backup', label: 'Backup & Restore' },
+  { id: 'danger', label: 'Danger Zone', danger: true },
+];
+
 function downloadFile(filename: string, content: string) {
   const blob = new Blob([content], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -226,6 +241,9 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [s, setS] = useState<SettingsType>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
   const desktopApi = getDesktopApi();
+  const [pane, setPane] = useState<PaneId>('general');
+  /** Whether a section renders: the popup shows all sections stacked, desktop only the active pane. */
+  const show = (id: PaneId) => !IS_DESKTOP || pane === id;
 
   // Master Password Change state
   const [currentPw, setCurrentPw] = useState('');
@@ -566,8 +584,34 @@ export function Settings({ onBack }: { onBack: () => void }) {
         {saved && <span className="ml-auto text-[11px] text-emerald-400">Saved</span>}
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex min-h-0 flex-1">
+        {IS_DESKTOP && (
+          <nav className="w-48 shrink-0 space-y-0.5 overflow-y-auto border-r border-white/5 p-3">
+            {PANES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPane(p.id)}
+                className={`w-full rounded-xl border px-3 py-2 text-left text-[13px] font-medium transition ${
+                  pane === p.id
+                    ? p.danger
+                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                      : 'border-violet-glow/30 bg-violet-glow/15 text-violet-soft'
+                    : p.danger
+                      ? 'border-transparent text-rose-400/60 hover:bg-rose-500/10 hover:text-rose-300'
+                      : 'border-transparent text-white/45 hover:bg-white/5 hover:text-white/75'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        <div className="min-w-0 flex-1 overflow-y-auto p-4">
+          <div className="mx-auto w-full max-w-2xl space-y-6">
         {/* Security & Lock Preferences */}
+        {show('general') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Vault Preferences</h2>
           <Card className="p-3 space-y-3">
@@ -588,11 +632,13 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </Field>
           </Card>
         </section>
+        )}
 
         {/* Desktop-only: startup + hotkey (Electron renderer only) */}
-        {desktopApi && <DesktopSection api={desktopApi} />}
+        {show('general') && desktopApi && <DesktopSection api={desktopApi} />}
 
         {/* Google Account */}
+        {show('account') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Google Account</h2>
           <Card className="p-3">
@@ -666,8 +712,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </Card>
           )}
         </section>
+        )}
 
         {/* Connected Devices */}
+        {show('devices') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Connected Devices</h2>
           <Card className="p-3">
@@ -712,8 +760,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
             )}
           </Card>
         </section>
+        )}
 
         {/* Change Master Password */}
+        {show('password') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Change Master Password</h2>
           <Card className="p-3">
@@ -761,8 +811,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </form>
           </Card>
         </section>
+        )}
 
         {/* Backup & Export */}
+        {show('backup') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Backup & Export</h2>
           <Card className="p-3 space-y-3">
@@ -815,8 +867,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </div>
           </Card>
         </section>
+        )}
 
-        {/* Restore & Import Backup */}
+        {/* Restore & Import Backup (same pane as Backup & Export on desktop) */}
+        {show('backup') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Restore & Import</h2>
           <Card className="p-3 space-y-3">
@@ -847,8 +901,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </div>
           </Card>
         </section>
+        )}
 
         {/* Danger Zone */}
+        {show('danger') && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-rose-400/60">Danger Zone</h2>
           <Card className="p-3 space-y-3 border-rose-500/20">
@@ -877,6 +933,9 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </div>
           </Card>
         </section>
+        )}
+          </div>
+        </div>
       </div>
 
       {/* Unencrypted Export Warning Modal */}

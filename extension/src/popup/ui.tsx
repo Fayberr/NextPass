@@ -57,15 +57,18 @@ export function Checkbox({
   checked,
   onChange,
   className,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <input
       type="checkbox"
       checked={checked}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.checked)}
       className={cx('pm-check', className)}
     />

@@ -71,6 +71,18 @@ export async function handleMessage(msg: Msg, session: SessionManager = defaultS
         await session.unlockWithDevice(msg.serverUrl, msg.googleUser);
         return { ok: true, kind: 'state', state: await session.getState() };
 
+      case 'enable_hello_unlock':
+        await session.enableHelloUnlock();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'disable_hello_unlock':
+        await session.disableHelloUnlock();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
+      case 'hello_unlock':
+        await session.unlockWithHello();
+        return { ok: true, kind: 'state', state: await session.getState() };
+
       case 'list_items':
         return { ok: true, kind: 'items', items: await session.listItems() };
 

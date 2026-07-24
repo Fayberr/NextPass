@@ -58,6 +58,7 @@ import {
   clearDeviceUnlockFailures,
   deviceUnlockLocked,
 } from './device-unlock.js';
+import { getHelloApi } from './hello-unlock.js';
 import type {
   AutofillMatch,
   AutofillIdentityMatch,
@@ -184,6 +185,17 @@ export class SessionManager {
         acct.wrappedKeyByDevice &&
         (!acct.deviceUnlockExpiresAt || Date.now() <= acct.deviceUnlockExpiresAt),
     );
+    // Desktop app only: does a Windows Hello-protected key blob exist, and is Hello usable?
+    let helloUnlockEnabled = false;
+    let helloUnlockAvailable = false;
+    const hello = getHelloApi();
+    if (hello && acct) {
+      try {
+        const hs = await hello.helloStatus();
+        helloUnlockEnabled = hs.enabled;
+        helloUnlockAvailable = hs.enabled && hs.available;
+      } catch {}
+    }
     return {
       configured: acct !== null,
       unlocked: this.vaultKey !== null,
@@ -196,6 +208,8 @@ export class SessionManager {
       googleEmail,
       deviceUnlockEnabled: Boolean(acct?.deviceUnlockEnabled),
       deviceUnlockAvailable,
+      helloUnlockEnabled,
+      helloUnlockAvailable,
     };
   }
 
@@ -327,6 +341,46 @@ export class SessionManager {
     void this.sync().catch(() => undefined);
   }
 
+  // --- Windows Hello quick unlock (desktop app only, see lib/hello-unlock.ts) ---
+
+  /**
+   * Opt-in, explicit action from Settings while unlocked (only moment the vault key is in memory
+   * to hand over). The main process shows a Windows Hello prompt FIRST - proving the person
+   * enabling this can actually pass Hello - then stores the key DPAPI-encrypted on disk.
+   */
+  async enableHelloUnlock(): Promise<void> {
+    await this.hydrate();
+    const vaultKey = this.requireKey();
+    const hello = getHelloApi();
+    if (!hello) throw new Error('Windows Hello unlock is only available in the desktop app.');
+    const res = await hello.helloEnable(toB64(vaultKey));
+    if (!res.ok) throw new Error(res.error ?? 'Could not enable Windows Hello unlock.');
+  }
+
+  /** Delete the Hello-protected key blob on this device. Invoked from the Settings toggle and
+   *  automatically on log-out and master-password change (same policy as forgetDevice). */
+  async disableHelloUnlock(): Promise<void> {
+    const hello = getHelloApi();
+    if (hello) await hello.helloDisable();
+  }
+
+  /** Unlock by passing a live Windows Hello (PIN/biometric) verification. The main process only
+   *  releases the DPAPI-decrypted vault key after the Hello prompt reports "Verified". */
+  async unlockWithHello(): Promise<void> {
+    const hello = getHelloApi();
+    if (!hello) throw new Error('Windows Hello unlock is only available in the desktop app.');
+    const acct = await getAccount();
+    if (!acct) throw new Error('No account on this device - register or log in first.');
+    const res = await hello.helloUnlock();
+    if (!res.ok || !res.vaultKey) {
+      throw new Error(res.error ?? 'Windows Hello unlock failed. Please use your master password.');
+    }
+    this.vaultKey = fromB64(res.vaultKey);
+    await setStoredKey(this.vaultKey);
+    this.lastError = null;
+    void this.sync().catch(() => undefined);
+  }
+
   /** Register a brand-new account on the server. Returns the one-time recovery phrase. */
   async register(serverUrl: string, identifier: string, password: string): Promise<string> {
     this.lastError = null;
@@ -424,6 +478,9 @@ export class SessionManager {
     await cacheClear();
     await clearAccount();
     await setPendingRecovery(null);
+    // Log-out drops the Hello-protected key blob too - a different account signing in on this
+    // device must never inherit the previous account's quick-unlock capability.
+    await this.disableHelloUnlock();
   }
 
   async changeMasterPassword(currentPassword: string, newPassword: string): Promise<void> {
@@ -471,6 +528,8 @@ export class SessionManager {
     // forces this device back through a full Google + master-password unlock next time, so a
     // stale cached device key can never quietly outlive a password change.
     await this.forgetDevice();
+    // Same policy for the Windows Hello blob: re-enable explicitly after the next real unlock.
+    await this.disableHelloUnlock();
   }
 
   async downloadRecoveryPhrase(): Promise<{ data: string; filename: string }> {

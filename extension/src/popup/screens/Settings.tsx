@@ -15,6 +15,7 @@ import {
 } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
+import { getHelloApi, type HelloStatus } from '../../lib/hello-unlock.js';
 import type { DeviceInfo } from '@pm/shared';
 
 function platformLabel(platform: string): string {
@@ -95,10 +96,32 @@ function DesktopSection({ api }: { api: DesktopApi }) {
   const [ds, setDs] = useState<DesktopSettingsShape | null>(null);
   const [recording, setRecording] = useState(false);
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const [hello, setHello] = useState<HelloStatus | null>(null);
+  const [helloBusy, setHelloBusy] = useState(false);
+  const [helloError, setHelloError] = useState<string | null>(null);
 
   useEffect(() => {
     void api.desktopSettingsGet().then(setDs).catch(() => setDs(null));
+    const h = getHelloApi();
+    if (h) void h.helloStatus().then(setHello).catch(() => setHello(null));
   }, []);
+
+  /** Toggling ON shows the Windows Hello prompt right away (the enable path verifies first);
+   *  toggling OFF just deletes the DPAPI blob. Both go through the shared session so the
+   *  vault key itself never touches this component. */
+  async function setHelloEnabled(on: boolean) {
+    setHelloBusy(true);
+    setHelloError(null);
+    try {
+      const res = await send({ kind: on ? 'enable_hello_unlock' : 'disable_hello_unlock' });
+      if (!res.ok) throw new Error(res.error);
+      setHello((h) => (h ? { ...h, enabled: on } : h));
+    } catch (e) {
+      setHelloError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setHelloBusy(false);
+    }
+  }
 
   async function patch(p: Partial<DesktopSettingsShape>) {
     const res = await api.desktopSettingsSet(p);
@@ -191,6 +214,36 @@ function DesktopSection({ api }: { api: DesktopApi }) {
           )}
           {hotkeyError && <p className="mt-2 text-xs text-rose-400">{hotkeyError}</p>}
         </div>
+
+        {hello && (
+          <div className="border-t border-white/5 pt-3">
+            <label className={`flex items-start justify-between gap-3 ${hello.available ? 'cursor-pointer' : 'opacity-50'}`}>
+              <div>
+                <p className="text-xs font-medium text-white/90">Unlock with Windows Hello</p>
+                <p className="text-[11px] text-white/40 mt-0.5">
+                  {hello.available
+                    ? 'Use your Windows PIN, fingerprint or face to unlock the vault instead of typing the master password.'
+                    : 'Windows Hello is not set up on this PC (Settings > Accounts > Sign-in options).'}
+                </p>
+              </div>
+              <Checkbox
+                checked={hello.enabled}
+                onChange={(v) => void setHelloEnabled(v)}
+                disabled={helloBusy || !hello.available}
+                className="shrink-0 mt-0.5"
+              />
+            </label>
+            {helloBusy && (
+              <p className="mt-2 text-[11px] text-violet-300">Waiting for Windows Hello…</p>
+            )}
+            {helloError && <p className="mt-2 text-xs text-rose-400">{helloError}</p>}
+            {hello.enabled && !helloBusy && !helloError && (
+              <p className="mt-2 text-[11px] text-white/40">
+                Turned off automatically when you log out or change the master password.
+              </p>
+            )}
+          </div>
+        )}
       </Card>
     </section>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Field, Input } from '../ui.js';
-import { ShieldCheck, AlertTriangle, GoogleIcon } from '../icons.js';
+import { ShieldCheck, AlertTriangle, GoogleIcon, Fingerprint } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SERVER_URL } from '../../lib/config.js';
 import type { VaultState } from '../../lib/messages.js';
@@ -189,6 +189,29 @@ export function Unlock({
     }
   }
 
+  /** Desktop app only (helloUnlockAvailable is never set in the browser popup): pass a live
+   *  Windows Hello PIN/biometric check, and the main process releases the stored vault key. */
+  async function handleHelloUnlock() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await send({ kind: 'hello_unlock' });
+      if (!res.ok) throw new Error(res.error);
+      if (res.kind === 'state') {
+        if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+          await chrome.storage.session.remove(DRAFT_KEY);
+        } else {
+          try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+        }
+        onUnlocked(res.state);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const [showRecoveryMode, setShowRecoveryMode] = useState(false);
   const [recoveryMnemonic, setRecoveryMnemonic] = useState('');
   const [newMasterPw, setNewMasterPw] = useState('');
@@ -353,6 +376,18 @@ export function Unlock({
           </div>
         ) : (
           <>
+            {configured && state.helloUnlockAvailable && (
+              <button
+                type="button"
+                onClick={handleHelloUnlock}
+                disabled={busy}
+                className="mb-3 flex w-full items-center justify-center gap-2.5 rounded-xl border border-violet-400/25 bg-violet-500/10 py-2.5 text-xs font-medium text-white transition hover:border-violet-400/40 hover:bg-violet-500/15 active:scale-[0.99]"
+              >
+                <Fingerprint size={16} className="text-violet-300" />
+                <span>Unlock with Windows Hello</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleGoogleAuth}

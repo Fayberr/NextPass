@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   desktopSettingsGet: () => ipcRenderer.invoke('desktop-settings-get'),
   desktopSettingsSet: (patch: Record<string, unknown>) => ipcRenderer.invoke('desktop-settings-set', patch),
   chromeImport: () => ipcRenderer.invoke('chrome-import'),
+  helloStatus: () => ipcRenderer.invoke('hello-status'),
+  helloEnable: (vaultKeyB64: string) => ipcRenderer.invoke('hello-enable', vaultKeyB64),
+  helloUnlock: () => ipcRenderer.invoke('hello-unlock'),
+  helloDisable: () => ipcRenderer.invoke('hello-disable'),
   onQuickSearchToggle: (callback: () => void) => {
     ipcRenderer.on('toggle-quick-search', () => callback());
   },

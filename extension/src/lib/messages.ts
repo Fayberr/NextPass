@@ -33,6 +33,11 @@ export interface VaultState {
    *  this is what the Unlock screen checks to decide whether the Google button can fully
    *  unlock, vs. just prefilling the identifier. */
   deviceUnlockAvailable?: boolean;
+  /** Desktop app only: a Windows Hello-protected vault-key blob exists on this device. */
+  helloUnlockEnabled?: boolean;
+  /** Desktop app only: Windows Hello is set up on this PC AND the feature is enabled - the
+   *  Unlock screen shows the "Unlock with Windows Hello" button when this is true. */
+  helloUnlockAvailable?: boolean;
 }
 
 /** Lightweight item summary safe to render in the list (already decrypted names). */
@@ -93,6 +98,9 @@ export type Msg =
   | { kind: 'enable_device_unlock' }
   | { kind: 'forget_device' }
   | { kind: 'device_unlock'; serverUrl: string; googleUser: { googleId: string; email: string; name?: string; picture?: string } }
+  | { kind: 'enable_hello_unlock' }
+  | { kind: 'disable_hello_unlock' }
+  | { kind: 'hello_unlock' }
   | { kind: 'google_signin' }
   | { kind: 'open_unlock_ui' }
   | { kind: 'list_devices' }

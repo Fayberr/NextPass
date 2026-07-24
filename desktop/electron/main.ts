@@ -461,3 +461,154 @@ ipcMain.handle('chrome-import', async (): Promise<ChromeImportResult> => {
     return { ok: false, error: err instanceof Error ? err.message : 'Chrome import failed.' };
   }
 });
+
+// ---------------------------------------------------------------------------
+// Windows Hello quick unlock.
+//
+// Two layers combine into "sign in with your Windows PIN/fingerprint/face":
+//  1. UserConsentVerifier (WinRT) shows the real Windows Hello prompt and reports whether the
+//     person at the keyboard passed PIN/biometric verification. Reached via PowerShell's WinRT
+//     projection - Electron has no binding for it and the deployed app can't use native modules
+//     (WinPC runs a bare electron.exe with a fully-bundled main.js, no node_modules).
+//  2. safeStorage (DPAPI) encrypts the vault key at rest in userData/hello-unlock.bin, bound to
+//     the signed-in Windows account. The base64 vault key is plain ASCII, so - unlike the Chrome
+//     import's raw AES key above - decryptString's string round-trip is lossless here.
+//
+// The main process only releases the decrypted key to the renderer after a live "Verified" from
+// the Hello prompt. Threat model matches the Google device-unlock (convenience unlock, not a
+// hardware boundary): malware running as this Windows user could call DPAPI itself. The blob is
+// deleted on log-out and master-password change (see SessionManager in the shared code).
+// ---------------------------------------------------------------------------
+
+function helloBlobFile(): string {
+  return path.join(app.getPath('userData'), 'hello-unlock.bin');
+}
+
+/** WinRT async plumbing shared by both Hello scripts. The `IAsyncOperation\`1` backtick is
+ *  PowerShell generic-arity syntax, escaped for this TS template literal. */
+const HELLO_PS_PRELUDE = `
+[void][Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+function Await-WinRT($op, [Type]$resultType) {
+  $m = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'GetAwaiter' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+  $awaiter = $m.MakeGenericMethod($resultType).Invoke($null, @($op))
+  while (-not $awaiter.IsCompleted) { Start-Sleep -Milliseconds 50 }
+  $awaiter.GetResult()
+}
+`;
+
+/** Write a temp .ps1 and run it (dodges every -Command quoting pitfall); returns trimmed stdout.
+ *  Dynamic values only ever travel via environment variables, never string-spliced into scripts. */
+function runHelloScript(body: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const tmp = path.join(os.tmpdir(), `nextpass-hello-${Date.now()}-${Math.random().toString(36).slice(2)}.ps1`);
+    fs.writeFileSync(tmp, HELLO_PS_PRELUDE + body, 'utf-8');
+    execFile(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', tmp],
+      { env: { ...process.env, ...env }, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
+      (err, stdout) => {
+        try { fs.unlinkSync(tmp); } catch {}
+        if (err) return reject(err);
+        resolve(stdout.trim());
+      },
+    );
+  });
+}
+
+let helloAvailableCache: boolean | null = null;
+
+async function isHelloAvailable(): Promise<boolean> {
+  if (process.platform !== 'win32') return false;
+  if (helloAvailableCache !== null) return helloAvailableCache;
+  try {
+    const out = await runHelloScript(
+      `$r = Await-WinRT ([Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync()) ([Windows.Security.Credentials.UI.UserConsentVerifierAvailability])
+Write-Output ("result=" + $r)`,
+      {},
+      20_000,
+    );
+    helloAvailableCache = /result=Available/.test(out);
+  } catch {
+    helloAvailableCache = false;
+  }
+  return helloAvailableCache;
+}
+
+/** Show the Windows Hello prompt; resolves to the verdict string ("Verified", "Canceled", …). */
+async function requestHelloVerification(message: string): Promise<string> {
+  const out = await runHelloScript(
+    `$r = Await-WinRT ([Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync($env:NP_HELLO_MSG)) ([Windows.Security.Credentials.UI.UserConsentVerificationResult])
+Write-Output ("result=" + $r)`,
+    { NP_HELLO_MSG: message },
+    120_000, // generous - the user is interacting with the Hello dialog
+  );
+  const m = /result=(\w+)/.exec(out);
+  return m?.[1] ?? 'Unknown';
+}
+
+function helloVerdictError(verdict: string): string {
+  switch (verdict) {
+    case 'Canceled':
+      return 'Windows Hello was cancelled.';
+    case 'RetriesExhausted':
+      return 'Too many failed Windows Hello attempts. Please use your master password.';
+    case 'DeviceNotPresent':
+    case 'NotConfiguredForUser':
+      return 'Windows Hello is not set up on this PC (Settings > Accounts > Sign-in options).';
+    case 'DisabledByPolicy':
+      return 'Windows Hello is disabled by system policy.';
+    case 'DeviceBusy':
+      return 'Windows Hello is busy - try again in a moment.';
+    default:
+      return 'Windows Hello verification failed.';
+  }
+}
+
+ipcMain.handle('hello-status', async () => {
+  if (process.platform !== 'win32') return { available: false, enabled: false };
+  return { available: await isHelloAvailable(), enabled: fs.existsSync(helloBlobFile()) };
+});
+
+ipcMain.handle('hello-enable', async (_e, vaultKeyB64: string) => {
+  try {
+    if (process.platform !== 'win32') return { ok: false, error: 'Windows Hello requires Windows.' };
+    if (typeof vaultKeyB64 !== 'string' || !vaultKeyB64) return { ok: false, error: 'No vault key provided.' };
+    if (!(await isHelloAvailable())) {
+      return { ok: false, error: 'Windows Hello is not set up on this PC (Settings > Accounts > Sign-in options).' };
+    }
+    if (!safeStorage.isEncryptionAvailable()) {
+      return { ok: false, error: 'Windows credential encryption (DPAPI) is unavailable.' };
+    }
+    // Verify FIRST - the person enabling this must be able to pass Hello right now.
+    const verdict = await requestHelloVerification('Confirm your identity to enable Windows Hello unlock for NextPass');
+    if (verdict !== 'Verified') return { ok: false, error: helloVerdictError(verdict) };
+    fs.writeFileSync(helloBlobFile(), safeStorage.encryptString(vaultKeyB64), { mode: 0o600 });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Could not enable Windows Hello unlock.' };
+  }
+});
+
+ipcMain.handle('hello-unlock', async () => {
+  try {
+    const file = helloBlobFile();
+    if (!fs.existsSync(file)) {
+      return { ok: false, error: 'Windows Hello unlock is not set up on this device.' };
+    }
+    const verdict = await requestHelloVerification('Unlock your NextPass vault');
+    if (verdict !== 'Verified') return { ok: false, error: helloVerdictError(verdict) };
+    const vaultKey = safeStorage.decryptString(fs.readFileSync(file));
+    return { ok: true, vaultKey };
+  } catch {
+    // Corrupt blob / DPAPI failure (e.g. Windows account changed): drop it so the UI stops
+    // offering an unlock path that can never succeed.
+    try { fs.unlinkSync(helloBlobFile()); } catch {}
+    return { ok: false, error: 'Could not read the stored key. Unlock with your master password and re-enable Windows Hello.' };
+  }
+});
+
+ipcMain.handle('hello-disable', async () => {
+  try { fs.unlinkSync(helloBlobFile()); } catch {}
+  return { ok: true };
+});

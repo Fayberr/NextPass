@@ -14,6 +14,8 @@ import {
   Copy,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   LayoutGrid,
   Rows,
 } from '../icons.js';
@@ -386,6 +388,220 @@ function QuickRow({
   );
 }
 
+/** Input-box style field row for grid cards: value + (for secrets) reveal toggle + copy icon,
+ *  mirroring Kaspersky's always-visible username/password rows. */
+function CardFieldRow({
+  field,
+  itemId,
+  revealed,
+  copiedKey,
+  onToggleReveal,
+  onCopy,
+}: {
+  field: QuickField;
+  itemId: string;
+  revealed: Set<string>;
+  copiedKey: string | null;
+  onToggleReveal: (key: string) => void;
+  onCopy: (key: string, value: string) => void;
+}) {
+  const key = `${itemId}:${field.key}`;
+  const isRevealed = revealed.has(key);
+  const shown = field.secret && !isRevealed ? '••••••••••••' : field.value;
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-2">
+      <span
+        className={`min-w-0 flex-1 truncate text-xs ${field.secret ? 'font-mono tracking-wide' : ''} text-white/75`}
+        title={field.label}
+      >
+        {shown}
+      </span>
+      {field.secret && (
+        <button
+          type="button"
+          onClick={() => field.value && onToggleReveal(key)}
+          className="shrink-0 rounded p-0.5 text-white/30 transition hover:bg-white/10 hover:text-white/70"
+          title={isRevealed ? 'Hide' : 'Reveal'}
+        >
+          {isRevealed ? <EyeOff size={13} /> : <Eye size={13} />}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => field.value && onCopy(key, field.value)}
+        className="shrink-0 rounded p-0.5 text-white/30 transition hover:bg-white/10 hover:text-white/70"
+        title="Copy"
+      >
+        {copiedKey === key ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+      </button>
+    </div>
+  );
+}
+
+/** Kaspersky-style always-expanded grid card. One card per website; when a site has several
+ *  saved credentials, dots + arrows page through them instead of rendering duplicate cards.
+ *  No hover-expand here on purpose - rows growing on hover shoved whole grid rows around. */
+function GridCard({
+  group,
+  detail,
+  ensureDetail,
+  revealed,
+  copiedKey,
+  onToggleReveal,
+  onCopy,
+  onSelect,
+  onToggleFav,
+}: {
+  group: ItemGroup;
+  detail: Record<string, Record<string, unknown>>;
+  ensureDetail: (id: string) => void;
+  revealed: Set<string>;
+  copiedKey: string | null;
+  onToggleReveal: (key: string) => void;
+  onCopy: (key: string, value: string) => void;
+  onSelect: (id: string) => void;
+  onToggleFav: (id: string, favorite: boolean) => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const count = group.items.length;
+  const cur = Math.min(idx, count - 1);
+  // Groups are never empty by construction (groupByWebsite only creates a group when pushing
+  // an item into it), so the indexed access is safe.
+  const item = group.items[cur]!;
+
+  // Decrypt the shown credential eagerly (cached in the parent) - the card is always
+  // expanded, so its fields must be there without waiting for a hover.
+  useEffect(() => {
+    ensureDetail(item.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  const site = item.uris.find(Boolean);
+  const domain = hostnameOf(item.uris);
+  const RowIcon = ROW_ICON[item.type as Category];
+  const loaded = quickFieldsFor(item.type, detail[item.id]);
+  // Until the decrypt lands, logins still render instantly from the summary: the username is
+  // already in the list payload and the password shows as dots either way.
+  const fields: QuickField[] =
+    loaded.length > 0
+      ? loaded
+      : item.type === 'login'
+        ? [
+            ...(item.username ? [{ key: 'username', label: 'User', value: item.username }] : []),
+            { key: 'password', label: 'Pass', value: '', secret: true },
+          ]
+        : [];
+
+  return (
+    <div className="flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 transition-colors duration-200 ease-out hover:border-violet-glow/25 hover:bg-white/[0.055]">
+      <div className="flex w-full items-start gap-3">
+        <button onClick={() => onSelect(item.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
+            {item.totp ? (
+              <KeyRound size={18} className="text-violet-soft" />
+            ) : (
+              <FaviconIcon uris={item.uris} name={item.name} fallbackIcon={RowIcon} />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold tracking-tight text-white/90">{item.name}</div>
+            {domain && <div className="mt-1 truncate text-xs text-violet-soft/80">{domain}</div>}
+          </div>
+        </button>
+        <span
+          role="button"
+          tabIndex={0}
+          title={item.favorite ? 'Unfavorite' : 'Favorite'}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFav(item.id, !item.favorite);
+          }}
+          className={`shrink-0 cursor-pointer rounded-md p-1 transition hover:bg-white/10 ${
+            item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
+          }`}
+        >
+          <Star size={14} filled={item.favorite} />
+        </span>
+      </div>
+
+      {fields.length > 0 && (
+        <div className="mt-3 divide-y divide-white/[0.06] rounded-xl border border-white/[0.07] bg-white/[0.03]">
+          {fields.map((f) => (
+            <CardFieldRow
+              key={f.key}
+              field={f}
+              itemId={item.id}
+              revealed={revealed}
+              copiedKey={copiedKey}
+              onToggleReveal={onToggleReveal}
+              onCopy={onCopy}
+            />
+          ))}
+        </div>
+      )}
+
+      {item.totp && (
+        <div className="mt-3">
+          <TotpCode secret={item.totp} label="" compact />
+        </div>
+      )}
+
+      {count > 1 && (
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIdx((cur - 1 + count) % count)}
+            className="rounded-md p-0.5 text-violet-soft transition hover:bg-white/10"
+            title="Previous account"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          {count <= 6 ? (
+            <div className="flex items-center gap-1.5">
+              {group.items.map((it, i) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => setIdx(i)}
+                  title={it.username || it.name}
+                  className={`h-1.5 w-1.5 rounded-full transition ${
+                    i === cur ? 'bg-white/80' : 'bg-white/25 hover:bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          ) : (
+            <span className="text-[10px] tabular-nums text-white/40">
+              {cur + 1} / {count}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setIdx((cur + 1) % count)}
+            className="rounded-md p-0.5 text-violet-soft transition hover:bg-white/10"
+            title="Next account"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
+
+      {site && (
+        <a
+          href={siteHref(site)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
+        >
+          <ExternalLink size={13} />
+          Open site
+        </a>
+      )}
+    </div>
+  );
+}
+
 export function VaultList({
   category,
   q,
@@ -444,17 +660,21 @@ export function VaultList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadKey]);
 
-  // Hovering a row fetches its decrypted fields (once, then cached) so the expand panel can show
-  // a quick username/email/password preview - same decrypt operation `get_item` already does for
-  // the full detail view, just lazily triggered by hover instead of a click.
-  function handleEnter(id: string) {
-    setOpenId(id);
+  // Fetches an item's decrypted fields once, then caches them - the same decrypt operation
+  // `get_item` already does for the full detail view. List rows trigger this on hover; grid
+  // cards trigger it on mount/page-switch since they are always expanded.
+  function ensureDetail(id: string) {
     if (id in detail) return;
     void send({ kind: 'get_item', id }).then((res) => {
       if (res.ok && res.kind === 'item') {
         setDetail((d) => ({ ...d, [id]: res.fields as Record<string, unknown> }));
       }
     });
+  }
+
+  function handleEnter(id: string) {
+    setOpenId(id);
+    ensureDetail(id);
   }
 
   function handleLeave(id: string) {
@@ -584,101 +804,6 @@ export function VaultList({
     );
   }
 
-  /** Grid-mode card: same data + lazy hover quick-fields as a list row, just laid out as a
-   *  Kaspersky-style tile. Login grouping is intentionally skipped here - in a grid, one card
-   *  per account reads better than a nested "N accounts" tile. */
-  function renderCard(item: ItemSummary) {
-    const site = item.uris.find(Boolean);
-    const RowIcon = ROW_ICON[item.type as Category];
-    const isOpen = openId === item.id;
-    const quickFields = quickFieldsFor(item.type, detail[item.id]);
-    return (
-      <div
-        key={item.id}
-        onMouseEnter={() => handleEnter(item.id)}
-        onMouseLeave={() => handleLeave(item.id)}
-        className="flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 transition-colors duration-200 ease-out hover:border-violet-glow/25 hover:bg-white/[0.055]"
-      >
-        <div className="flex w-full items-start gap-3">
-          <button onClick={() => onSelect(item.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/5">
-              {item.totp ? (
-                <KeyRound size={18} className="text-violet-soft" />
-              ) : (
-                <FaviconIcon uris={item.uris} name={item.name} fallbackIcon={RowIcon} />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold tracking-tight text-white/90">{item.name}</div>
-              {(item.username || site) && (
-                <div className="mt-1 truncate text-xs text-white/40">{item.username || site}</div>
-              )}
-            </div>
-          </button>
-          <span
-            role="button"
-            tabIndex={0}
-            title={item.favorite ? 'Unfavorite' : 'Favorite'}
-            onClick={(e) => {
-              e.stopPropagation();
-              void toggleFav(item.id, !item.favorite);
-            }}
-            className={`shrink-0 cursor-pointer rounded-md p-1 transition hover:bg-white/10 ${
-              item.favorite ? 'text-violet-soft' : 'text-white/20 hover:text-white/50'
-            }`}
-          >
-            <Star size={14} filled={item.favorite} />
-          </span>
-        </div>
-
-        {item.totp && (
-          <div className="mt-3">
-            <TotpCode secret={item.totp} label="" compact />
-          </div>
-        )}
-
-        {quickFields.length > 0 && (
-          <div
-            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
-              isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-            }`}
-          >
-            <div className="overflow-hidden">
-              <div className="mt-3 space-y-1.5 border-t border-white/[0.06] pt-2.5">
-                {quickFields.map((f) => {
-                  const key = `${item.id}:${f.key}`;
-                  return (
-                    <QuickRow
-                      key={f.key}
-                      field={f}
-                      revealed={revealed.has(key)}
-                      copied={copiedKey === key}
-                      onToggleReveal={() => toggleReveal(key)}
-                      onCopy={() => void copyField(key, f.value)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {site && (
-          <a
-            href={siteHref(site)}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
-          >
-            <ExternalLink size={13} />
-            Open site
-          </a>
-        )}
-      </div>
-    );
-  }
-
   function renderGroup(group: ItemGroup) {
     const first = group.items[0];
     if (!first) return null;
@@ -767,7 +892,20 @@ export function VaultList({
           </p>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] items-start gap-3 p-1">
-            {filtered.map((item) => renderCard(item))}
+            {groups.map((group) => (
+              <GridCard
+                key={group.key}
+                group={group}
+                detail={detail}
+                ensureDetail={ensureDetail}
+                revealed={revealed}
+                copiedKey={copiedKey}
+                onToggleReveal={toggleReveal}
+                onCopy={(key, value) => void copyField(key, value)}
+                onSelect={onSelect}
+                onToggleFav={(id, favorite) => void toggleFav(id, favorite)}
+              />
+            ))}
           </div>
         ) : (
           groups.map((group) => renderGroup(group))

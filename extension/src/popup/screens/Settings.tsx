@@ -42,6 +42,160 @@ function fmtWhen(ms: number): string {
   return new Date(ms).toLocaleDateString();
 }
 
+// ---------------------------------------------------------------------------
+// Desktop-app-only section (launch on startup, quick-search hotkey). Only
+// rendered inside the Electron renderer, where the preload script exposes
+// `window.electronAPI` - in the browser extension popup this stays inert.
+// ---------------------------------------------------------------------------
+
+interface DesktopSettingsShape {
+  launchOnStartup: boolean;
+  startMinimized: boolean;
+  quickSearchHotkey: string;
+}
+
+interface DesktopApi {
+  desktopSettingsGet: () => Promise<DesktopSettingsShape>;
+  desktopSettingsSet: (
+    patch: Partial<DesktopSettingsShape>,
+  ) => Promise<{ settings: DesktopSettingsShape; error: string | null }>;
+}
+
+function getDesktopApi(): DesktopApi | null {
+  const api = (globalThis as { electronAPI?: Partial<DesktopApi> }).electronAPI;
+  return api?.desktopSettingsGet && api.desktopSettingsSet ? (api as DesktopApi) : null;
+}
+
+/** Electron accelerator -> what a Windows user expects to read. */
+function prettyAccel(accel: string): string {
+  return accel.replace(/CommandOrControl|CmdOrCtrl/g, 'Ctrl').replace(/Super/g, 'Win');
+}
+
+/** Build an Electron accelerator from a keydown, or null while only modifiers are held. */
+function accelFromEvent(e: KeyboardEvent): string | null {
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return null;
+  const mods: string[] = [];
+  if (e.ctrlKey) mods.push('CommandOrControl');
+  if (e.altKey) mods.push('Alt');
+  if (e.shiftKey) mods.push('Shift');
+  if (e.metaKey) mods.push('Super');
+  if (mods.length === 0) return null; // require at least one modifier for a global hotkey
+  const special: Record<string, string> = {
+    ' ': 'Space',
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+  };
+  const key = special[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key);
+  return [...mods, key].join('+');
+}
+
+function DesktopSection({ api }: { api: DesktopApi }) {
+  const [ds, setDs] = useState<DesktopSettingsShape | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.desktopSettingsGet().then(setDs).catch(() => setDs(null));
+  }, []);
+
+  async function patch(p: Partial<DesktopSettingsShape>) {
+    const res = await api.desktopSettingsSet(p);
+    setDs(res.settings);
+    setHotkeyError(res.error);
+  }
+
+  useEffect(() => {
+    if (!recording) return;
+    function onKey(e: KeyboardEvent) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        setRecording(false);
+        return;
+      }
+      const accel = accelFromEvent(e);
+      if (accel) {
+        setRecording(false);
+        void patch({ quickSearchHotkey: accel });
+      }
+    }
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [recording]);
+
+  if (!ds) return null;
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Desktop App</h2>
+      <Card className="p-3 space-y-3">
+        <label className="flex items-start justify-between gap-3 cursor-pointer">
+          <div>
+            <p className="text-xs font-medium text-white/90">Launch when Windows starts</p>
+            <p className="text-[11px] text-white/40 mt-0.5">
+              Open NextPass automatically after you sign in to Windows.
+            </p>
+          </div>
+          <Checkbox
+            checked={ds.launchOnStartup}
+            onChange={(v) => void patch({ launchOnStartup: v })}
+            className="shrink-0 mt-0.5"
+          />
+        </label>
+
+        {ds.launchOnStartup && (
+          <label className="flex items-start justify-between gap-3 cursor-pointer border-t border-white/5 pt-3">
+            <div>
+              <p className="text-xs font-medium text-white/90">Start minimized</p>
+              <p className="text-[11px] text-white/40 mt-0.5">
+                Wait quietly in the taskbar instead of opening the window.
+              </p>
+            </div>
+            <Checkbox
+              checked={ds.startMinimized}
+              onChange={(v) => void patch({ startMinimized: v })}
+              className="shrink-0 mt-0.5"
+            />
+          </label>
+        )}
+
+        <div className="border-t border-white/5 pt-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-white/90">Quick-search hotkey</p>
+              <p className="text-[11px] text-white/40 mt-0.5">
+                Global shortcut that opens the search overlay from anywhere.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setHotkeyError(null);
+                setRecording((r) => !r);
+              }}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 font-mono text-xs transition ${
+                recording
+                  ? 'border-violet-400/60 bg-violet-500/15 text-violet-200 animate-pulse'
+                  : 'border-white/10 bg-white/5 text-white/80 hover:border-white/20 hover:bg-white/10'
+              }`}
+            >
+              {recording ? 'Press keys…' : prettyAccel(ds.quickSearchHotkey)}
+            </button>
+          </div>
+          {recording && (
+            <p className="mt-2 text-[11px] text-white/40">
+              Press the new combination (needs at least one modifier). Esc cancels.
+            </p>
+          )}
+          {hotkeyError && <p className="mt-2 text-xs text-rose-400">{hotkeyError}</p>}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
 const LOCK_OPTIONS = [
   { value: 0, label: 'Never' },
   { value: 1, label: '1 minute' },
@@ -71,6 +225,7 @@ function downloadFile(filename: string, content: string) {
 export function Settings({ onBack }: { onBack: () => void }) {
   const [s, setS] = useState<SettingsType>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const desktopApi = getDesktopApi();
 
   // Master Password Change state
   const [currentPw, setCurrentPw] = useState('');
@@ -433,6 +588,9 @@ export function Settings({ onBack }: { onBack: () => void }) {
             </Field>
           </Card>
         </section>
+
+        {/* Desktop-only: startup + hotkey (Electron renderer only) */}
+        {desktopApi && <DesktopSection api={desktopApi} />}
 
         {/* Google Account */}
         <section className="space-y-3">

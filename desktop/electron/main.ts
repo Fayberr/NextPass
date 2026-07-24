@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, shell } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +14,86 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST;
 
 let mainWindow: BrowserWindow | null = null;
+
+// ---------------------------------------------------------------------------
+// Desktop-only settings (launch on startup, start minimized, quick-search
+// hotkey). Persisted as plain JSON in the app's userData dir - nothing secret
+// lives here. The renderer reads/writes them via the desktop-settings IPC pair.
+// ---------------------------------------------------------------------------
+
+const DEFAULT_HOTKEY = 'CommandOrControl+Alt+A';
+
+interface DesktopSettings {
+  launchOnStartup: boolean;
+  startMinimized: boolean;
+  quickSearchHotkey: string;
+}
+
+const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
+  launchOnStartup: false,
+  startMinimized: false,
+  quickSearchHotkey: DEFAULT_HOTKEY,
+};
+
+let desktopSettings: DesktopSettings = { ...DEFAULT_DESKTOP_SETTINGS };
+
+function settingsFile(): string {
+  return path.join(app.getPath('userData'), 'desktop-settings.json');
+}
+
+function loadDesktopSettings(): void {
+  try {
+    const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'));
+    desktopSettings = { ...DEFAULT_DESKTOP_SETTINGS, ...raw };
+  } catch {
+    // First run / unreadable file - defaults are fine.
+  }
+}
+
+function saveDesktopSettings(): void {
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify(desktopSettings, null, 2));
+  } catch (err) {
+    console.error('Failed to persist desktop settings:', err);
+  }
+}
+
+/** True when Windows auto-started us via the login item we registered with --start-minimized. */
+const startMinimized = process.argv.includes('--start-minimized');
+
+/**
+ * (Re-)register the quick-search global hotkey. Returns an error string (for the
+ * Settings UI) instead of throwing; on failure the caller decides the fallback.
+ */
+function registerHotkey(accel: string): string | null {
+  try {
+    const ok = globalShortcut.register(accel, () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+        mainWindow.webContents.send('toggle-quick-search');
+      }
+    });
+    return ok ? null : `Could not register "${accel}" - it may already be in use by another app.`;
+  } catch {
+    return `"${accel}" is not a valid hotkey.`;
+  }
+}
+
+/**
+ * Sync the Windows login item with the current settings. We run unpackaged
+ * (electron.exe <appRoot>), so the app path must be passed explicitly - a bare
+ * process.execPath would auto-start an empty Electron shell.
+ */
+function applyLoginItem(): void {
+  const args = [app.getAppPath()];
+  if (desktopSettings.startMinimized) args.push('--start-minimized');
+  app.setLoginItemSettings({
+    openAtLogin: desktopSettings.launchOnStartup,
+    path: process.execPath,
+    args,
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -41,7 +122,13 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    if (startMinimized) {
+      // Auto-started at Windows login with "start minimized" enabled: sit in the
+      // taskbar instead of stealing focus from whatever the user is doing.
+      mainWindow?.minimize();
+    } else {
+      mainWindow?.show();
+    }
     // Detached devtools only during dev - never auto-open in the deployed app.
     if (VITE_DEV_SERVER_URL) {
       mainWindow?.webContents.openDevTools({ mode: 'detach' });
@@ -56,19 +143,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  loadDesktopSettings();
   createWindow();
 
-  // Register Global Hotkey for Quick Search Overlay (e.g., Ctrl+Alt+A)
-  try {
-    globalShortcut.register('CommandOrControl+Alt+A', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-        mainWindow.webContents.send('toggle-quick-search');
-      }
-    });
-  } catch (err) {
-    console.error('Failed to register global hotkey:', err);
+  // Register the quick-search hotkey from settings; fall back to the default if a
+  // previously saved custom combo can no longer be registered (e.g. claimed by
+  // another app since) so the feature never silently disappears.
+  const err = registerHotkey(desktopSettings.quickSearchHotkey);
+  if (err) {
+    console.error('Quick-search hotkey:', err);
+    if (desktopSettings.quickSearchHotkey !== DEFAULT_HOTKEY) {
+      desktopSettings.quickSearchHotkey = DEFAULT_HOTKEY;
+      saveDesktopSettings();
+      registerHotkey(DEFAULT_HOTKEY);
+    }
   }
 
   app.on('activate', () => {
@@ -101,6 +189,30 @@ ipcMain.on('window-maximize', () => {
 
 ipcMain.on('window-close', () => {
   mainWindow?.close();
+});
+
+ipcMain.handle('desktop-settings-get', () => ({ ...desktopSettings }));
+
+ipcMain.handle('desktop-settings-set', (_e, patch: Partial<DesktopSettings>) => {
+  const prev = { ...desktopSettings };
+  desktopSettings = { ...desktopSettings, ...patch };
+  let error: string | null = null;
+
+  if (patch.quickSearchHotkey && patch.quickSearchHotkey !== prev.quickSearchHotkey) {
+    try {
+      globalShortcut.unregister(prev.quickSearchHotkey);
+    } catch {}
+    error = registerHotkey(desktopSettings.quickSearchHotkey);
+    if (error) {
+      // Roll back to the previous (known-good) combo so the hotkey keeps working.
+      desktopSettings.quickSearchHotkey = prev.quickSearchHotkey;
+      registerHotkey(prev.quickSearchHotkey);
+    }
+  }
+
+  if ('launchOnStartup' in patch || 'startMinimized' in patch) applyLoginItem();
+  saveDesktopSettings();
+  return { settings: { ...desktopSettings }, error };
 });
 
 ipcMain.on('open-external', (_, url: string) => {

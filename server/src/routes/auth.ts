@@ -74,20 +74,73 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
 <html>
 <head>
   <meta charset="utf-8">
-  <title>NextPass — Signed In</title>
+  <meta name="color-scheme" content="dark">
+  <title>NextPass</title>
   <style>
-    body { background: #09090b; color: #fff; font-family: system-ui, -apple-system, sans-serif; display: flex; height: 100vh; align-items: center; justify-content: center; margin: 0; }
-    .card { background: #18181b; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 420px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-    h2 { color: #a855f7; margin-top: 0; margin-bottom: 12px; font-size: 24px; font-weight: 700; }
-    p { color: #a1a1aa; font-size: 15px; line-height: 1.5; margin-bottom: 0; }
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      background: #0a0a0b;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      display: flex;
+      height: 100vh;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+    }
+    .card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 320px;
+      padding: 8px;
+      opacity: 0;
+      transform: translateY(4px);
+      animation: in 0.35s ease-out forwards;
+    }
+    @keyframes in { to { opacity: 1; transform: translateY(0); } }
+    .icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(52, 211, 153, 0.12);
+      margin-bottom: 20px;
+    }
+    .icon svg { width: 20px; height: 20px; }
+    h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 0 0 6px;
+      color: #fafafa;
+    }
+    p {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #71717a;
+      margin: 0;
+    }
+    .status { margin-top: 20px; font-size: 11px; color: #52525b; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Successfully Signed In!</h2>
-    <p>Authentication complete. You can close this tab and return to NextPass Desktop.</p>
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 6 9 17l-5-5"/>
+      </svg>
+    </div>
+    <h1>Signed in to NextPass</h1>
+    <p>You can return to the desktop app now.</p>
+    <div class="status" id="status">This tab will close automatically&hellip;</div>
   </div>
   <script>
+    const statusEl = document.getElementById('status');
     if (window.location.hash) {
       const hash = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
@@ -96,6 +149,10 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
         fetch('http://127.0.0.1:28999/token?id_token=' + encodeURIComponent(idToken), { mode: 'no-cors' }).catch(() => {});
       }
     }
+    setTimeout(() => {
+      window.close();
+      setTimeout(() => { if (statusEl) statusEl.textContent = 'You can close this tab now.'; }, 200);
+    }, 900);
   </script>
 </body>
 </html>`);

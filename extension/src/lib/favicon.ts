@@ -7,15 +7,16 @@
  *  - a real icon (Google/DuckDuckGo both return HTTP 200 with a generic placeholder for unknown
  *    domains instead of 404ing, so a plain onError fallback chain silently gets stuck on that
  *    placeholder forever - this module detects and skips those instead),
- *  - requested at a high enough size to not look blurry when scaled up in the UI, and
+ *  - requested at a high enough size to not look blurry when scaled up in the UI,
  *  - with any flat white/near-white background matte flood-filled to transparent, without
  *    touching white pixels that are part of the logo's own artwork (those aren't connected to
- *    the edge through other background pixels, so the flood-fill never reaches them).
+ *    the edge through other background pixels, so the flood-fill never reaches them), and
+ *  - still shown even when the source doesn't send CORS headers (DuckDuckGo's icon CDN doesn't -
+ *    `fetch()` throws, so we can't read pixels to strip the background, but a plain `<img src>`
+ *    doesn't need CORS to display, so callers fall back to that untouched instead of nothing).
  */
 
-/** External favicon CDNs to try, in order. Both send permissive CORS headers, so we can pull
- *  pixel data into a canvas for the transparency pass - a bare `<img src=".../favicon.ico">`
- *  fetched directly from the site itself usually can't (no CORS header -> tainted canvas). */
+/** External favicon CDNs to try, in order. */
 export function externalFaviconSources(domain: string): string[] {
   return [
     `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`,
@@ -23,41 +24,46 @@ export function externalFaviconSources(domain: string): string[] {
   ];
 }
 
-interface FaviconResult {
+export interface FaviconOutcome {
   src: string;
-  ok: boolean;
+  /**
+   * - 'transparent': fetched, decoded, and (if needed) background-stripped successfully - safe
+   *   to render as-is.
+   * - 'raw': couldn't read pixel data (most often a CORS-less source like DuckDuckGo, where
+   *   `fetch()` itself throws) - render `src` directly via `<img>` anyway; that doesn't need
+   *   CORS, and if the resource genuinely doesn't exist the `<img>`'s own onError will still
+   *   fire so the caller can move on to the next source.
+   * - 'skip': fetched fine but it's almost certainly a generic "unknown domain" placeholder
+   *   (implausibly tiny response, or nothing left opaque after stripping the background) -
+   *   don't render this at all, go straight to the next source.
+   */
+  status: 'transparent' | 'raw' | 'skip';
 }
 
-const cache = new Map<string, FaviconResult>();
+const cache = new Map<string, FaviconOutcome>();
 
 function closeTo(r: number, g: number, b: number, tr: number, tg: number, tb: number, tol: number): boolean {
   return Math.abs(r - tr) <= tol && Math.abs(g - tg) <= tol && Math.abs(b - tb) <= tol;
 }
 
-/**
- * Fetch `rawUrl` and, if it has a flat light background touching the image edges, flood-fill
- * that matte to transparent. Returns `ok: false` (falling back to `rawUrl` untouched as `src`)
- * when the fetch fails, the response is implausibly tiny, or - after stripping the background -
- * almost nothing is left opaque, since that's the signature of a generic "unknown site"
- * placeholder rather than a real favicon. Callers should try the next source when `ok` is false.
- */
-export async function transparentFavicon(rawUrl: string): Promise<FaviconResult> {
+export async function transparentFavicon(rawUrl: string): Promise<FaviconOutcome> {
   const cached = cache.get(rawUrl);
   if (cached) return cached;
 
-  const fail: FaviconResult = { src: rawUrl, ok: false };
+  const raw: FaviconOutcome = { src: rawUrl, status: 'raw' };
+  const skip: FaviconOutcome = { src: rawUrl, status: 'skip' };
 
   try {
     const res = await fetch(rawUrl);
     if (!res.ok) {
-      cache.set(rawUrl, fail);
-      return fail;
+      cache.set(rawUrl, skip);
+      return skip;
     }
     const blob = await res.blob();
     // Google/DDG's generic "unknown domain" placeholders are tiny; a real favicon never is.
     if (blob.size < 60) {
-      cache.set(rawUrl, fail);
-      return fail;
+      cache.set(rawUrl, skip);
+      return skip;
     }
 
     const bitmap = await createImageBitmap(blob);
@@ -68,8 +74,8 @@ export async function transparentFavicon(rawUrl: string): Promise<FaviconResult>
     canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
-      cache.set(rawUrl, fail);
-      return fail;
+      cache.set(rawUrl, raw);
+      return raw;
     }
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
@@ -138,15 +144,20 @@ export async function transparentFavicon(rawUrl: string): Promise<FaviconResult>
       if ((data[i] ?? 0) > 10) opaque++;
     }
     if (opaque / (w * h) < 0.015) {
-      cache.set(rawUrl, fail);
-      return fail;
+      cache.set(rawUrl, skip);
+      return skip;
     }
 
-    const result: FaviconResult = { src: canvas.toDataURL('image/png'), ok: true };
+    const result: FaviconOutcome = { src: canvas.toDataURL('image/png'), status: 'transparent' };
     cache.set(rawUrl, result);
     return result;
   } catch {
-    cache.set(rawUrl, fail);
-    return fail;
+    // fetch()/decode threw - almost always a CORS-less source (no Access-Control-Allow-Origin
+    // header, e.g. DuckDuckGo's icon CDN) rather than a genuinely missing resource. We can't
+    // reliably tell the difference, so fall back to displaying the raw URL directly: plain
+    // `<img>` loading doesn't require CORS, and a real 404 still gets caught by the caller's
+    // onError handler on that image.
+    cache.set(rawUrl, raw);
+    return raw;
   }
 }

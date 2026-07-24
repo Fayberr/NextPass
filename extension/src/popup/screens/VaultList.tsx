@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../ui.js';
 import {
   Plus,
@@ -97,10 +97,8 @@ function FaviconIcon({
   name: string;
   fallbackIcon?: any;
 }) {
-  const [state, setState] = useState<{ src: string | null; isChrome: boolean }>({
-    src: null,
-    isChrome: false,
-  });
+  const [src, setSrc] = useState<string | null>(null);
+  const nextRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let active = true;
@@ -108,48 +106,48 @@ function FaviconIcon({
     const bd = d ? baseDomain(d) : null;
     const isF = d?.endsWith('fayber.dev');
     const chromeUrl = faviconFor(uris);
+    const domain = d || bd;
 
-    async function load() {
-      if (isF && chromeUrl) {
-        if (active) setState({ src: chromeUrl, isChrome: true });
-        return;
-      }
+    // fayber.dev is our own private site - Google/DDG won't have indexed it, so go straight to
+    // Chrome's own cache (works since Fabian visits it directly). Otherwise try the external
+    // CDNs first and only fall back to Chrome's cache (possibly just a generic globe if the
+    // site's never been visited in-browser) as a last resort.
+    const candidates: string[] = isF && chromeUrl
+      ? [chromeUrl]
+      : [...(domain ? externalFaviconSources(domain) : []), ...(chromeUrl ? [chromeUrl] : [])];
 
-      const domain = d || bd;
-      if (domain) {
-        for (const source of externalFaviconSources(domain)) {
-          const { src, ok } = await transparentFavicon(source);
-          if (!active) return;
-          if (ok) {
-            setState({ src, isChrome: false });
-            return;
-          }
+    let i = 0;
+
+    async function step() {
+      while (i < candidates.length) {
+        const url = candidates[i++]!;
+        if (url === chromeUrl) {
+          if (active) setSrc(url);
+          return;
         }
-      }
-
-      if (chromeUrl) {
-        if (active) setState({ src: chromeUrl, isChrome: true });
+        const outcome = await transparentFavicon(url);
+        if (!active) return;
+        if (outcome.status === 'skip') continue; // confirmed placeholder - try the next source
+        setSrc(outcome.src); // 'transparent' or 'raw' - render it; onError will advance if 'raw' was actually broken
         return;
       }
-
-      if (active) setState({ src: null, isChrome: false });
+      if (active) setSrc(null);
     }
 
-    void load();
+    nextRef.current = () => void step();
+    void step();
 
     return () => {
       active = false;
     };
   }, [uris]);
 
-  const handleError = () => setState({ src: null, isChrome: false });
-
-  if (state.src) {
+  if (src) {
     return (
       <img
-        src={state.src}
+        src={src}
         alt=""
-        onError={state.isChrome ? handleError : undefined}
+        onError={() => nextRef.current()}
         className="h-full w-full rounded-md object-contain"
         style={{ imageRendering: '-webkit-optimize-contrast' }}
       />

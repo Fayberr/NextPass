@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { externalFaviconSources, transparentFavicon } from '../../../extension/src/lib/favicon';
 
 interface FaviconProps {
@@ -8,11 +8,15 @@ interface FaviconProps {
 }
 
 /** Same shared favicon pipeline as the main vault list (see extension/src/lib/favicon.ts): tries
- *  Google then DuckDuckGo at a high resolution, skips generic "unknown domain" placeholders, and
- *  flood-fills any flat white background matte to transparent. Keeps the quick-search overlay's
- *  icons visually consistent with the main window instead of the old plain/opaque favicon.ico. */
+ *  Google then DuckDuckGo at a high resolution, skips confirmed generic "unknown domain"
+ *  placeholders, flood-fills any flat white background matte to transparent, and still renders
+ *  a source even when the pipeline couldn't read its pixels (e.g. DuckDuckGo sends no CORS
+ *  header) - a plain `<img>` load doesn't need CORS, and its own onError advances to the next
+ *  candidate if that source turns out to be genuinely broken. Keeps the quick-search overlay's
+ *  icons visually consistent with the main window. */
 export function Favicon({ url, title, size = 24 }: FaviconProps) {
   const [src, setSrc] = useState<string | null>(null);
+  const nextRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let active = true;
@@ -26,18 +30,23 @@ export function Favicon({ url, title, size = 24 }: FaviconProps) {
       return;
     }
 
-    async function load() {
-      for (const source of externalFaviconSources(domain)) {
-        const { src: resolved, ok } = await transparentFavicon(source);
+    const candidates = externalFaviconSources(domain);
+    let i = 0;
+
+    async function step() {
+      while (i < candidates.length) {
+        const source = candidates[i++]!;
+        const outcome = await transparentFavicon(source);
         if (!active) return;
-        if (ok) {
-          setSrc(resolved);
-          return;
-        }
+        if (outcome.status === 'skip') continue;
+        setSrc(outcome.src);
+        return;
       }
+      if (active) setSrc(null);
     }
 
-    void load();
+    nextRef.current = () => void step();
+    void step();
 
     return () => {
       active = false;
@@ -59,6 +68,7 @@ export function Favicon({ url, title, size = 24 }: FaviconProps) {
     <img
       src={src}
       alt={title}
+      onError={() => nextRef.current()}
       className="rounded-md object-contain shrink-0 bg-transparent"
       style={{ width: size, height: size }}
     />

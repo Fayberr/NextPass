@@ -94,44 +94,44 @@ export async function authRoutes(app: FastifyInstance, { db }: { db: DB }): Prom
       flex-direction: column;
       align-items: center;
       text-align: center;
-      max-width: 320px;
-      padding: 8px;
+      max-width: 352px;
+      padding: 9px;
       opacity: 0;
       transform: translateY(4px);
       animation: in 0.35s ease-out forwards;
     }
     @keyframes in { to { opacity: 1; transform: translateY(0); } }
     .icon {
-      width: 44px;
-      height: 44px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(52, 211, 153, 0.12);
-      margin-bottom: 20px;
+      background: rgba(167, 139, 250, 0.14);
+      margin-bottom: 22px;
     }
-    .icon svg { width: 20px; height: 20px; }
+    .icon svg { width: 22px; height: 22px; }
     h1 {
-      font-size: 15px;
+      font-size: 16.5px;
       font-weight: 600;
       letter-spacing: -0.01em;
-      margin: 0 0 6px;
+      margin: 0 0 7px;
       color: #fafafa;
     }
     p {
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.5;
       color: #71717a;
       margin: 0;
     }
-    .status { margin-top: 20px; font-size: 11px; color: #52525b; }
+    .status { margin-top: 22px; font-size: 12px; color: #52525b; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 6 9 17l-5-5"/>
       </svg>
     </div>

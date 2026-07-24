@@ -30,10 +30,14 @@ export function Favicon({ url, title, size = 24 }: FaviconProps) {
       return;
     }
 
-    const candidates = externalFaviconSources(domain);
+    let candidates: string[] = [];
     let i = 0;
 
     async function step() {
+      if (candidates.length === 0 && i === 0) {
+        candidates = await externalFaviconSources(domain);
+        if (!active) return;
+      }
       while (i < candidates.length) {
         const source = candidates[i++]!;
         const outcome = await transparentFavicon(source);

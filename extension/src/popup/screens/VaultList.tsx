@@ -112,13 +112,16 @@ function FaviconIcon({
     // Chrome's own cache (works since Fabian visits it directly). Otherwise try the external
     // CDNs first and only fall back to Chrome's cache (possibly just a generic globe if the
     // site's never been visited in-browser) as a last resort.
-    const candidates: string[] = isF && chromeUrl
-      ? [chromeUrl]
-      : [...(domain ? externalFaviconSources(domain) : []), ...(chromeUrl ? [chromeUrl] : [])];
-
+    let candidates: string[] = [];
     let i = 0;
 
     async function step() {
+      if (candidates.length === 0 && i === 0) {
+        candidates = isF && chromeUrl
+          ? [chromeUrl]
+          : [...(domain ? await externalFaviconSources(domain) : []), ...(chromeUrl ? [chromeUrl] : [])];
+        if (!active) return;
+      }
       while (i < candidates.length) {
         const url = candidates[i++]!;
         if (url === chromeUrl) {

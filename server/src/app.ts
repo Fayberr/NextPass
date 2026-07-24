@@ -7,6 +7,7 @@ import { vaultRoutes } from './routes/vault.js';
 import { itemRoutes } from './routes/items.js';
 import { syncRoutes } from './routes/sync.js';
 import { deviceRoutes } from './routes/devices.js';
+import { faviconRoutes } from './routes/favicon.js';
 
 export interface AppOptions {
   db?: DB;
@@ -37,6 +38,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   // Public (identity establishment)
   app.register(authRoutes, { db });
+  app.register(faviconRoutes);
 
   // Authenticated (everything below requires a valid device token)
   app.register(async (secured) => {

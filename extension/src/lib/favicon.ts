@@ -11,17 +11,28 @@
  *  - with any flat white/near-white background matte flood-filled to transparent, without
  *    touching white pixels that are part of the logo's own artwork (those aren't connected to
  *    the edge through other background pixels, so the flood-fill never reaches them), and
- *  - still shown even when the source doesn't send CORS headers (DuckDuckGo's icon CDN doesn't -
- *    `fetch()` throws, so we can't read pixels to strip the background, but a plain `<img src>`
- *    doesn't need CORS to display, so callers fall back to that untouched instead of nothing).
+ *  - routed through our own server's `/api/favicon` proxy rather than fetched directly from
+ *    Google/DuckDuckGo - confirmed 2026-07-24 that NEITHER of those CDNs sends an
+ *    Access-Control-Allow-Origin header, so a renderer-side `fetch()` straight to them always
+ *    throws (CORS), meaning the pixel-read/background-strip step could never actually run and
+ *    every icon silently fell back to being displayed completely unprocessed. The server has no
+ *    CORS restriction (it's a Node process, not a browser) and re-serves the bytes with our own
+ *    permissive CORS headers, so the client pipeline below can finally read real pixel data.
  */
 
-/** External favicon CDNs to try, in order. */
-export function externalFaviconSources(domain: string): string[] {
-  return [
-    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=256`,
-    `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`,
-  ];
+import { DEFAULT_SERVER_URL, getAccount } from './config.js';
+
+/** Our own server's favicon proxy (see server/src/routes/favicon.ts) - it tries Google then
+ *  DuckDuckGo server-side and re-serves whichever succeeds with CORS headers we control. */
+export async function externalFaviconSources(domain: string): Promise<string[]> {
+  let base = DEFAULT_SERVER_URL;
+  try {
+    const account = await getAccount();
+    if (account?.serverUrl) base = account.serverUrl;
+  } catch {
+    // no chrome.storage context (e.g. tests) - fall back to the default
+  }
+  return [`${base}/api/favicon?domain=${encodeURIComponent(domain)}`];
 }
 
 export interface FaviconOutcome {

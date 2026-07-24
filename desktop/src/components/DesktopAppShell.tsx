@@ -21,7 +21,6 @@ export function DesktopAppShell({
   syncing,
   onHealth,
   onSettings,
-  onImport,
   children,
 }: AppShellProps) {
   return (
@@ -40,7 +39,6 @@ export function DesktopAppShell({
           onLock={onLock}
           onSync={onSync}
           syncing={syncing}
-          onImport={onImport}
         />
         <div className="min-h-0 flex-1">{children}</div>
       </div>

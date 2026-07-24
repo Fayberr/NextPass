@@ -308,7 +308,12 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
       );
       break;
     case 'settings':
-      content = <Settings onBack={() => updateView({ name: 'list' })} />;
+      content = (
+        <Settings
+          onBack={() => updateView({ name: 'list' })}
+          onImport={() => updateView({ name: 'import' })}
+        />
+      );
       break;
     case 'import':
       content = (
@@ -317,7 +322,7 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
             updateView({ name: 'list' });
             setReloadTick((t) => t + 1);
           }}
-          onCancel={() => updateView({ name: 'list' })}
+          onCancel={() => updateView({ name: 'settings' })}
         />
       );
       break;
@@ -359,7 +364,6 @@ export function App({ Shell = AppShell }: { Shell?: (props: AppShellProps) => Re
       syncing={syncing}
       onHealth={() => updateView({ name: 'health' })}
       onSettings={() => updateView({ name: 'settings' })}
-      onImport={() => updateView({ name: 'import' })}
     >
       {content}
     </Shell>

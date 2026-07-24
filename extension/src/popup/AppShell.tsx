@@ -17,7 +17,6 @@ export interface AppShellProps {
   syncing: boolean;
   onHealth: () => void;
   onSettings: () => void;
-  onImport: () => void;
   children: ReactNode;
 }
 
@@ -31,7 +30,6 @@ export function AppShell({
   syncing,
   onHealth,
   onSettings,
-  onImport,
   children,
 }: AppShellProps) {
   return (
@@ -45,7 +43,6 @@ export function AppShell({
           syncing={syncing}
           onHealth={onHealth}
           onSettings={onSettings}
-          onImport={onImport}
         />
         <div className="min-h-0 flex-1">{children}</div>
       </div>

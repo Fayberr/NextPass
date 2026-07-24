@@ -293,7 +293,7 @@ function downloadFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export function Settings({ onBack }: { onBack: () => void }) {
+export function Settings({ onBack, onImport }: { onBack: () => void; onImport?: () => void }) {
   const [s, setS] = useState<SettingsType>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
   const desktopApi = getDesktopApi();
@@ -995,6 +995,20 @@ export function Settings({ onBack }: { onBack: () => void }) {
                 </div>
               )}
             </div>
+
+            {onImport && (
+              <div className="border-t border-white/5 pt-3">
+                <p className="text-xs font-medium text-white/80">Import Passwords</p>
+                <p className="text-[11px] text-white/40 mt-0.5">
+                  Import logins from a browser CSV export (Chrome, Edge, Firefox, Kaspersky) or
+                  directly from Google Chrome on desktop.
+                </p>
+                <Button variant="subtle" className="mt-2 w-full justify-center" onClick={onImport}>
+                  <Upload size={14} className="mr-1.5" />
+                  Import Passwords…
+                </Button>
+              </div>
+            )}
           </Card>
         </section>
         )}

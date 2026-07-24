@@ -6,20 +6,18 @@
  */
 
 import { Button, Input } from '../../../extension/src/popup/ui.js';
-import { Lock, RefreshCw, Upload } from '../../../extension/src/popup/icons.js';
+import { Lock, RefreshCw } from '../../../extension/src/popup/icons.js';
 
 export function DesktopTopBar({
   search,
   onLock,
   onSync,
   syncing,
-  onImport,
 }: {
   search?: { value: string; onChange: (v: string) => void };
   onLock: () => void;
   onSync: () => void;
   syncing: boolean;
-  onImport: () => void;
 }) {
   return (
     <div className="flex items-center gap-2.5 border-b border-white/[0.07] p-4">
@@ -32,9 +30,6 @@ export function DesktopTopBar({
       ) : (
         <div className="flex-1" />
       )}
-      <Button variant="subtle" onClick={onImport} title="Import passwords">
-        <Upload size={17} />
-      </Button>
       <Button variant="subtle" onClick={onSync} title="Sync">
         <RefreshCw size={17} className={syncing ? 'animate-spin' : undefined} />
       </Button>

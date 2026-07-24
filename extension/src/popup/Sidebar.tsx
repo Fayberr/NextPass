@@ -57,7 +57,7 @@ function RailButton({
       className={`flex h-10 w-10 items-center justify-center rounded-xl border transition ${
         active
           ? 'border-violet-glow/30 bg-violet-glow/15 text-violet-soft'
-          : 'border-transparent text-white/40 hover:border-[rgba(255,255,255,0.07)] hover:bg-white/5 hover:text-white/70'
+          : 'border-transparent text-white/40 hover:border-white/[0.07] hover:bg-white/5 hover:text-white/70'
       }`}
     >
       {children}
@@ -79,7 +79,7 @@ export function Sidebar({
     : '';
 
   return (
-    <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-[rgba(255,255,255,0.07)] bg-white/[0.035] py-3">
+    <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-white/[0.07] bg-white/[0.035] py-3">
       {CATEGORIES.map(({ key, icon: Icon, title }) => (
         <RailButton key={key} active={active === key} title={title} onClick={() => onSelect(key)}>
           <Icon size={18} />

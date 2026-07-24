@@ -5,6 +5,15 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Themeable foreground: `white` is remapped to the --pm-fg CSS variable so every
+        // existing text-white/N, bg-white/N, border-white/N utility follows the active theme
+        // (dark keeps --pm-fg at 255 255 255, pixel-identical to before; light flips it to a
+        // deep ink). Variables live in globals.css under :root / [data-theme='light'].
+        // For elements that must stay literally white in both themes (text on solid violet
+        // buttons, etc.) use text-[#fff].
+        white: 'rgb(var(--pm-fg) / <alpha-value>)',
+        // Opaque elevated surface (dropdowns, floating panels) that inverts with the theme.
+        surface: 'rgb(var(--pm-surface) / <alpha-value>)',
         // Deep near-black anthracite base + violet/indigo accent (per design spec).
         ink: {
           900: '#0F0E13',
@@ -14,7 +23,11 @@ export default {
         },
         violet: {
           glow: '#8B5CF6',
-          soft: '#A78BFA',
+          // Accent *text* shades route through variables so light mode can deepen them for
+          // contrast (violet-glow stays fixed - it's used in gradients/borders).
+          soft: 'var(--pm-violet-soft)',
+          200: 'var(--pm-violet-200)',
+          300: 'var(--pm-violet-300)',
         },
       },
       fontFamily: {

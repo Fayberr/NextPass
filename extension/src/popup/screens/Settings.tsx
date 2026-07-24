@@ -12,9 +12,12 @@ import {
   Globe,
   Monitor,
   Smartphone,
+  Sun,
+  Moon,
 } from '../icons.js';
 import { send } from '../client.js';
 import { DEFAULT_SETTINGS, type Settings as SettingsType } from '../../lib/settings.js';
+import { applyTheme } from '../../lib/theme.js';
 import { getHelloApi, type HelloStatus } from '../../lib/hello-unlock.js';
 import type { DeviceInfo } from '@pm/shared';
 
@@ -682,6 +685,46 @@ export function Settings({ onBack }: { onBack: () => void }) {
                 options={CLIP_OPTIONS}
                 onChange={(v) => update({ clipboardClearSeconds: v })}
               />
+            </Field>
+          </Card>
+        </section>
+        )}
+
+        {/* Appearance */}
+        {show('general') && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/40">Appearance</h2>
+          <Card className="p-3">
+            <Field label="Theme">
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-white/5 p-1">
+                {(
+                  [
+                    { value: 'dark', label: 'Dark', Icon: Moon },
+                    { value: 'light', label: 'Light', Icon: Sun },
+                    { value: 'system', label: 'System', Icon: Monitor },
+                  ] as const
+                ).map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      applyTheme(value);
+                      void update({ theme: value });
+                    }}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition ${
+                      s.theme === value
+                        ? 'bg-violet-glow/25 text-violet-soft'
+                        : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-white/40">
+                System follows your operating system's light/dark preference.
+              </p>
             </Field>
           </Card>
         </section>

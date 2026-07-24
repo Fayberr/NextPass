@@ -149,7 +149,7 @@ export function ItemDetail({
           <button
             onClick={del}
             disabled={busy}
-            className="rounded-full bg-red-500/80 px-3 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-40"
+            className="rounded-full bg-red-500/80 px-3 py-1 text-xs font-medium text-[#fff] hover:bg-red-500 disabled:opacity-40"
           >
             {busy ? 'Deleting…' : 'Delete'}
           </button>

@@ -17,6 +17,8 @@ import { Settings } from './screens/Settings.js';
 import { Import } from './screens/Import.js';
 import { AppShell, type AppShellProps } from './AppShell.js';
 import type { Category } from './Sidebar.js';
+import { getSettings } from '../lib/settings.js';
+import { applyTheme } from '../lib/theme.js';
 import type { VaultState } from '../lib/messages.js';
 import type {
   LoginFields,
@@ -58,6 +60,14 @@ const ADD_VIEW: Partial<Record<Category, View>> = {
 };
 
 const POPUP_STATE_KEY = 'pm_popup_active_state';
+
+// Apply the persisted theme as early as possible (module load, before first paint settles).
+// Runs in both the extension popup and the Electron desktop renderer (shared App).
+if (typeof document !== 'undefined') {
+  void getSettings()
+    .then((s) => applyTheme(s.theme))
+    .catch(() => applyTheme('dark'));
+}
 
 function savePopupState(v: View, c: Category) {
   try {

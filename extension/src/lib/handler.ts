@@ -1,6 +1,7 @@
 import { SessionManager } from './session.js';
 import type { Msg, MsgResult } from './messages.js';
 import { promptGoogleAuth } from './google-auth.js';
+import { getSettings, setSettings } from './settings.js';
 
 const defaultSession = new SessionManager();
 
@@ -190,6 +191,15 @@ export async function handleMessage(msg: Msg, session: SessionManager = defaultS
 
       case 'autofill_card_query':
         return { ok: true, kind: 'card_autofill', matches: await session.cardQuery() };
+
+      // Settings live in storage, not the session. The background worker handles these
+      // itself (it also reschedules auto-lock); this direct-call path (desktop renderer)
+      // just persists them.
+      case 'get_settings':
+        return { ok: true, kind: 'settings', settings: await getSettings() };
+
+      case 'set_settings':
+        return { ok: true, kind: 'settings', settings: await setSettings(msg.patch) };
 
       default:
         return { ok: false, error: `Unknown message: ${(msg as { kind: string }).kind}` };

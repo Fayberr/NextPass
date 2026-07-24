@@ -259,7 +259,7 @@ export function Unlock({
     <div className="flex h-full w-full items-center justify-center p-6 overflow-y-auto">
       <div className="w-full max-w-md my-auto">
       <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-glow to-indigo-500 text-white shadow-glass">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-glow to-indigo-500 text-[#fff] shadow-glass">
           <ShieldCheck size={28} />
         </div>
         <h1 className="text-xl font-semibold tracking-tight">NextPass</h1>
@@ -419,8 +419,8 @@ export function Unlock({
                     onClick={() => setMode(m)}
                     className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
                       mode === m
-                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/30'
-                        : 'text-zinc-400 hover:text-white'
+                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-[#fff] shadow-md shadow-violet-600/30'
+                        : 'text-white/50 hover:text-white'
                     }`}
                   >
                     {m === 'login' ? 'Log in' : 'Register'}

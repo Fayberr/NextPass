@@ -36,7 +36,7 @@ export function Favicon({ url, title, size = 24 }: FaviconProps) {
   if (stage >= sources.length) {
     return (
       <div
-        className="rounded-md bg-zinc-800 text-zinc-400 border border-white/10 flex items-center justify-center font-bold uppercase shrink-0"
+        className="rounded-md bg-white/10 text-white/50 border border-white/10 flex items-center justify-center font-bold uppercase shrink-0"
         style={{ width: size, height: size, fontSize: size * 0.45 }}
       >
         {title.charAt(0) || '?'}

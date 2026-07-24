@@ -47,7 +47,7 @@ export function QuickSearchOverlay({ isOpen, onClose, items }: QuickSearchOverla
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl bg-zinc-900/95 border border-brand-500/40 rounded-2xl shadow-2xl shadow-brand-500/20 overflow-hidden flex flex-col backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
+        className="w-full max-w-xl bg-surface/95 border border-brand-500/40 rounded-2xl shadow-2xl shadow-brand-500/20 overflow-hidden flex flex-col backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Search Bar Header */}
         <div className="p-4 border-b border-white/10 flex items-center gap-3">
@@ -58,13 +58,13 @@ export function QuickSearchOverlay({ isOpen, onClose, items }: QuickSearchOverla
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Quick Search Password HUD (Type domain or title)..."
-            className="w-full bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none font-medium"
+            className="w-full bg-transparent text-sm text-white placeholder-white/35 focus:outline-none font-medium"
           />
           <div className="flex items-center gap-1.5 px-2 py-1 bg-brand-500/20 text-brand-300 rounded-lg text-[10px] font-mono border border-brand-500/30">
             <Sparkles className="h-3 w-3" />
             <span>Spotlight</span>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-500 hover:text-white rounded-lg">
+          <button onClick={onClose} className="p-1 text-white/40 hover:text-white rounded-lg">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -72,7 +72,7 @@ export function QuickSearchOverlay({ isOpen, onClose, items }: QuickSearchOverla
         {/* Results List */}
         <div className="max-h-80 overflow-y-auto p-2 divide-y divide-white/5">
           {filtered.length === 0 ? (
-            <div className="p-8 text-center text-xs text-zinc-500 font-mono">
+            <div className="p-8 text-center text-xs text-white/40 font-mono">
               Keine passenden Zugangsdaten gefunden
             </div>
           ) : (
@@ -88,17 +88,17 @@ export function QuickSearchOverlay({ isOpen, onClose, items }: QuickSearchOverla
                     <h4 className="text-xs font-semibold text-white group-hover:text-brand-300 transition-colors truncate">
                       {item.title}
                     </h4>
-                    <p className="text-[11px] text-zinc-400 font-mono truncate">
+                    <p className="text-[11px] text-white/50 font-mono truncate">
                       {item.username || item.url || 'Kein Benutzername'}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-zinc-500 group-hover:text-zinc-300">
+                  <span className="text-[10px] font-mono text-white/40 group-hover:text-white/75">
                     Klicken zum Kopieren
                   </span>
-                  <button className="p-2 bg-zinc-800 group-hover:bg-brand-600 text-zinc-300 group-hover:text-white rounded-lg transition-colors">
+                  <button className="p-2 bg-white/10 group-hover:bg-brand-600 text-white/75 group-hover:text-[#fff] rounded-lg transition-colors">
                     {copiedId === item.id ? (
                       <Check className="h-4 w-4 text-emerald-400" />
                     ) : (

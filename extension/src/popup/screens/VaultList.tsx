@@ -562,7 +562,7 @@ export function VaultList({
             }`}
           >
             <div className="overflow-hidden">
-              <div className="mt-2 space-y-1.5 border-t border-[rgba(255,255,255,0.06)] pt-2 pl-10">
+              <div className="mt-2 space-y-1.5 border-t border-white/[0.06] pt-2 pl-10">
                 {quickFields.map((f) => {
                   const key = `${item.id}:${f.key}`;
                   return (
@@ -597,7 +597,7 @@ export function VaultList({
         key={item.id}
         onMouseEnter={() => handleEnter(item.id)}
         onMouseLeave={() => handleLeave(item.id)}
-        className="flex flex-col rounded-2xl border border-[rgba(255,255,255,0.06)] bg-white/[0.035] p-4 transition-colors duration-200 ease-out hover:border-violet-glow/25 hover:bg-white/[0.055]"
+        className="flex flex-col rounded-2xl border border-white/[0.06] bg-white/[0.035] p-4 transition-colors duration-200 ease-out hover:border-violet-glow/25 hover:bg-white/[0.055]"
       >
         <div className="flex w-full items-start gap-3">
           <button onClick={() => onSelect(item.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
@@ -644,7 +644,7 @@ export function VaultList({
             }`}
           >
             <div className="overflow-hidden">
-              <div className="mt-3 space-y-1.5 border-t border-[rgba(255,255,255,0.06)] pt-2.5">
+              <div className="mt-3 space-y-1.5 border-t border-white/[0.06] pt-2.5">
                 {quickFields.map((f) => {
                   const key = `${item.id}:${f.key}`;
                   return (
@@ -669,7 +669,7 @@ export function VaultList({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
+            className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] py-1.5 text-xs font-medium text-white/50 transition hover:bg-white/[0.07] hover:text-white/80"
           >
             <ExternalLink size={13} />
             Open site
@@ -688,7 +688,7 @@ export function VaultList({
     return (
       <div
         key={group.key}
-        className="mb-1.5 overflow-hidden rounded-xl border border-[rgba(255,255,255,0.05)] bg-white/[0.02]"
+        className="mb-1.5 overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02]"
       >
         <button
           onClick={() => toggleGroup(group.key)}
@@ -712,7 +712,7 @@ export function VaultList({
           }`}
         >
           <div className="overflow-hidden">
-            <div className="space-y-1 border-t border-[rgba(255,255,255,0.05)] p-1.5">
+            <div className="space-y-1 border-t border-white/[0.05] p-1.5">
               {group.items.map((item) => renderRow(item, true))}
             </div>
           </div>
@@ -729,7 +729,7 @@ export function VaultList({
           {byCategory.length}
         </span>
         {IS_DESKTOP && (
-          <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-[rgba(255,255,255,0.07)] bg-white/[0.03] p-0.5">
+          <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-white/[0.07] bg-white/[0.03] p-0.5">
             <button
               type="button"
               title="Grid view"
@@ -775,7 +775,7 @@ export function VaultList({
       </div>
 
       {showAdd && (
-        <footer className="flex gap-2 border-t border-[rgba(255,255,255,0.07)] p-3">
+        <footer className="flex gap-2 border-t border-white/[0.07] p-3">
           <Button className="flex-1" onClick={onAdd}>
             <Plus size={16} /> {ADD_LABEL[category]}
           </Button>

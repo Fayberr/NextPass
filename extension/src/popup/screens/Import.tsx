@@ -181,7 +181,7 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
               Choose the file or paste its contents below. Nothing leaves your device - parsing
               happens here, and each item is saved the same way as a manually-added login.
             </p>
-            <label className="mb-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[rgba(255,255,255,0.15)] bg-white/[0.03] py-3 text-sm text-white/60 hover:bg-white/[0.06]">
+            <label className="mb-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.03] py-3 text-sm text-white/60 hover:bg-white/[0.06]">
               <Upload size={15} />
               Choose file…
               <input
@@ -263,7 +263,7 @@ export function Import({ onDone, onCancel }: { onDone: () => void; onCancel: () 
 
         {stage.name === 'preview' && (
           <>
-            <div className="mb-3 rounded-xl border border-[rgba(255,255,255,0.07)] bg-white/5 p-3 text-xs text-white/60">
+            <div className="mb-3 rounded-xl border border-white/[0.07] bg-white/5 p-3 text-xs text-white/60">
               <p>
                 Found <span className="font-semibold text-white/90">{stage.entries.length}</span>{' '}
                 logins in the export.{' '}

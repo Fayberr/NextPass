@@ -3,8 +3,33 @@
 @tailwind utilities;
 
 @layer base {
+  /* Theme variables - keep in sync with extension/src/globals.css. Tailwind's `white`
+     is remapped to rgb(var(--pm-fg) / alpha), so every *-white/N utility follows these.
+     data-theme is set on <html> by extension/src/lib/theme.ts (shared App). */
   :root {
     color-scheme: dark;
+    --pm-fg: 255 255 255;
+    --pm-surface: 29 26 38; /* #1D1A26 ink-700 */
+    --pm-bg: #0f0e13;
+    --pm-body-fg: #ece9f5;
+    --pm-glow-a: rgba(139, 92, 246, 0.22);
+    --pm-glow-b: rgba(99, 102, 241, 0.12);
+    --pm-violet-soft: #a78bfa;
+    --pm-violet-200: #ddd6fe;
+    --pm-violet-300: #c4b5fd;
+  }
+
+  :root[data-theme='light'] {
+    color-scheme: light;
+    --pm-fg: 32 28 46; /* deep violet-tinted ink */
+    --pm-surface: 255 255 255;
+    --pm-bg: #efedf7;
+    --pm-body-fg: #262138;
+    --pm-glow-a: rgba(139, 92, 246, 0.14);
+    --pm-glow-b: rgba(99, 102, 241, 0.1);
+    --pm-violet-soft: #7c3aed;
+    --pm-violet-200: #5b21b6;
+    --pm-violet-300: #6d28d9;
   }
 
   html,
@@ -18,12 +43,12 @@
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    /* Deep anthracite with a subtle violet ambient glow (top-left). */
+    /* Base with a subtle violet ambient glow (top-left). */
     background:
-      radial-gradient(120% 80% at 15% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
-      radial-gradient(90% 60% at 110% 10%, rgba(99, 102, 241, 0.12), transparent 55%),
-      #0f0e13;
-    color: #ece9f5;
+      radial-gradient(120% 80% at 15% -10%, var(--pm-glow-a), transparent 60%),
+      radial-gradient(90% 60% at 110% 10%, var(--pm-glow-b), transparent 55%),
+      var(--pm-bg);
+    color: var(--pm-body-fg);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -31,7 +56,7 @@
     width: 8px;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgb(var(--pm-fg) / 0.1);
     border-radius: 8px;
   }
 }
@@ -47,9 +72,9 @@
 
 @layer components {
   .glass {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgb(var(--pm-fg) / 0.04);
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgb(var(--pm-fg) / 0.08);
   }
 
   /* Custom checkbox */
@@ -62,8 +87,8 @@
     display: inline-grid;
     place-content: center;
     border-radius: 6px;
-    border: 1.5px solid rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid rgb(var(--pm-fg) / 0.25);
+    background: rgb(var(--pm-fg) / 0.05);
     cursor: pointer;
     transition:
       background 0.15s,
@@ -96,7 +121,7 @@
     width: 100%;
     height: 6px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgb(var(--pm-fg) / 0.12);
     cursor: pointer;
   }
   .pm-range::-webkit-slider-thumb {

@@ -17,7 +17,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#0f0e17] text-zinc-100 overflow-hidden select-none">
+    <div className="h-screen w-screen flex flex-col bg-[var(--pm-bg)] text-white/95 overflow-hidden select-none">
       {/* Integrated Frameless Window Header */}
       <TitleBar
         searchQuery=""

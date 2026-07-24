@@ -22,7 +22,7 @@ export function DesktopTopBar({
   onImport: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2.5 border-b border-[rgba(255,255,255,0.07)] p-4">
+    <div className="flex items-center gap-2.5 border-b border-white/[0.07] p-4">
       {search ? (
         <Input
           placeholder="Search…"

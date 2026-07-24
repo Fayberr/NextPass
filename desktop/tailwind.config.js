@@ -9,6 +9,9 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Keep in sync with extension/tailwind.config.js (theme variables in index.css).
+        white: 'rgb(var(--pm-fg) / <alpha-value>)',
+        surface: 'rgb(var(--pm-surface) / <alpha-value>)',
         ink: {
           900: '#0F0E13',
           800: '#16141C',
@@ -17,7 +20,9 @@ export default {
         },
         violet: {
           glow: '#8B5CF6',
-          soft: '#A78BFA',
+          soft: 'var(--pm-violet-soft)',
+          200: 'var(--pm-violet-200)',
+          300: 'var(--pm-violet-300)',
         },
         brand: {
           50: '#f5f3ff',

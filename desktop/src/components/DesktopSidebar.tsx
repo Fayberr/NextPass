@@ -102,7 +102,7 @@ export function DesktopSidebar({
   counts?: Partial<Record<Category, number>>;
 }) {
   return (
-    <nav className="flex w-60 shrink-0 select-none flex-col border-r border-[rgba(255,255,255,0.07)] bg-white/[0.035] p-3">
+    <nav className="flex w-60 shrink-0 select-none flex-col border-r border-white/[0.07] bg-white/[0.035] p-3">
       <SectionHeader>Vault</SectionHeader>
       <div className="space-y-0.5">
         {CATEGORIES.map(({ key, icon, label }) => (

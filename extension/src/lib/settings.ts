@@ -16,12 +16,14 @@ export interface GeneratorDefaults {
 export interface Settings {
   autoLockMinutes: number; // 0 = never
   clipboardClearSeconds: number; // 0 = never
+  theme: 'dark' | 'light' | 'system'; // applied via lib/theme.ts (data-theme on <html>)
   gen: GeneratorDefaults;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   autoLockMinutes: 15,
   clipboardClearSeconds: 30,
+  theme: 'dark',
   gen: {
     mode: 'password',
     length: 20,
